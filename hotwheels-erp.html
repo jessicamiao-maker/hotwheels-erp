@@ -30,6 +30,15 @@
     .series-price-toggle input { accent-color: var(--red); width: 15px; height: 15px; cursor: pointer; }
     .stock-badge { display: inline-block; background: rgba(232,0,26,0.15); color: var(--red); border-radius: 20px; font-size: 11px; font-weight: 700; padding: 1px 7px; margin-left: 5px; }
     .series-badge { display: inline-block; background: rgba(255,215,0,0.15); color: var(--gold); border-radius: 20px; font-size: 10px; font-weight: 700; padding: 1px 6px; margin-left: 4px; text-transform: uppercase; }
+    .bundle-badge { display: inline-block; background: rgba(99,179,237,0.15); color: #63b3ed; border-radius: 20px; font-size: 10px; font-weight: 700; padding: 1px 6px; margin-left: 4px; text-transform: uppercase; }
+    /* SUB-CARS */
+    .sub-car-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+    .sub-car-num { font-size: 12px; color: var(--muted); width: 20px; flex-shrink: 0; text-align: right; }
+    .sub-car-del { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 7px; width: 28px; height: 36px; cursor: pointer; font-size: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    .sub-car-del:hover { color: var(--loss); border-color: var(--loss); }
+    .sub-cars-list-detail { display: flex; flex-direction: column; gap: 4px; }
+    .sub-car-item { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); padding: 3px 0; }
+    .sub-car-item::before { content: '🚗'; font-size: 12px; }
 
     /* SERIES TYPE PILLS */
     .pill-group { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
@@ -303,8 +312,16 @@
         <div style="max-width:680px;">
           <div class="card">
             <input type="hidden" id="f-id">
+            <div class="fg">
+              <label>Entry Type</label>
+              <div class="pill-group">
+                <label class="pill-radio selected" onclick="selectEntryType(this,'single')"><input type="radio" name="entry-type" value="single" checked>🚗 Single Car</label>
+                <label class="pill-radio" onclick="selectEntryType(this,'bundle')"><input type="radio" name="entry-type" value="bundle">🎁 Multi-Pack</label>
+                <label class="pill-radio" onclick="selectEntryType(this,'series')"><input type="radio" name="entry-type" value="series">📦 Series Group</label>
+              </div>
+            </div>
             <div class="frow">
-              <div class="fg"><label>Car Name / Model *</label><input id="f-name" class="fi" placeholder="e.g. Ferrari 488 GTB"></div>
+              <div class="fg"><label id="f-name-label">Car Name / Model *</label><input id="f-name" class="fi" placeholder="e.g. Ferrari 488 GTB"></div>
               <div class="fg">
                 <label>Series / Collection</label>
                 <select id="f-series" class="fi" onchange="onSeriesChange()">
@@ -323,6 +340,12 @@
                   </div>
                 </div>
               </div>
+            </div>
+            <div id="sub-cars-wrap" class="fg" style="display:none;">
+              <label id="sub-cars-label">Cars in This Package</label>
+              <div id="sub-cars-list"></div>
+              <button type="button" class="btn btn-outline btn-sm" onclick="addSubCar()" style="margin-top:2px;">＋ Add Car to List</button>
+              <p id="sub-cars-hint" style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.6;"></p>
             </div>
             <div class="fg">
               <label>Purchase Entries *</label>
@@ -440,6 +463,10 @@
       <div><div class="di-lbl">Color</div><div class="di-val" id="m-color"></div></div>
       <div style="grid-column:1/-1;"><div class="di-lbl">Series</div><div class="di-val" id="m-series"></div></div>
     </div>
+    <div id="m-subcars-wrap" style="display:none;margin-top:14px;">
+      <div class="di-lbl" style="margin-bottom:8px;" id="m-subcars-label">Cars in Package</div>
+      <div id="m-subcars" class="sub-cars-list-detail"></div>
+    </div>
     <div id="m-stock-entries-wrap" style="display:none;margin-top:14px;">
       <div class="di-lbl" style="margin-bottom:6px;">Purchase Breakdown</div>
       <div id="m-stock-entries" style="font-size:13px;color:var(--muted);"></div>
@@ -550,6 +577,7 @@ let detailId = null;
 let scanner = null;
 let selLabels = new Set();
 let stockEntries = [{qty: 1, price: ''}];
+let subCarEntries = [];
 
 // ═══════════════════════════════
 //  BOOT
@@ -862,7 +890,8 @@ function renderTable() {
   let list = cars.filter(c =>
     (c.name||'').toLowerCase().includes(q) ||
     (c.barcode||'').toLowerCase().includes(q) ||
-    (c.series||'').toLowerCase().includes(q)
+    (c.series||'').toLowerCase().includes(q) ||
+    (c.subCars||[]).some(s => (s.name||'').toLowerCase().includes(q))
   );
   if (sort==='name') list.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   else if (sort==='oldest') list.sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''));
@@ -878,9 +907,12 @@ function renderTable() {
     const pl = totalResale - tc;
     const stockLabel = ts > 1 ? `<span class="stock-badge">×${ts}</span>` : '';
     const seriesBadge = c.isSeriesPrice ? `<span class="series-badge">set</span>` : '';
+    const subCount = c.subCars?.length || 0;
+    const bundleBadge = c.entryType === 'bundle' ? `<span class="bundle-badge">🎁 ${subCount} cars</span>` :
+                        c.entryType === 'series' ? `<span class="bundle-badge">📦 ${subCount} cars</span>` : '';
     return `<tr onclick="showDetail('${c.id}')">
       <td>${c.imageUrl?`<img src="${h(c.imageUrl)}" class="thumb">`:`<div class="thumb-ph">🏎️</div>`}</td>
-      <td><div style="font-weight:600;">${h(c.name)}${stockLabel}</div>${c.series?`<div style="font-size:11px;color:var(--muted);">${h(seriesLabel(c))}</div>`:''}</td>
+      <td><div style="font-weight:600;">${h(c.name)}${stockLabel}${bundleBadge}</div>${c.series?`<div style="font-size:11px;color:var(--muted);">${h(seriesLabel(c))}</div>`:''}</td>
       <td><span class="code-tag">${h(c.barcode||'')}</span></td>
       <td>¥${fmt(tc)}${seriesBadge}${c.stockEntries?.length>1?`<div style="font-size:10px;color:var(--muted);">${ts} units</div>`:''}</td>
       <td>${{mint:'✨ Mint',['near-mint']:'⭐ Near Mint',good:'👍 Good',played:'🎮 Played'}[c.condition]||'—'}</td>
@@ -912,6 +944,15 @@ function resetForm() {
   el('bc-preview-wrap').style.display = 'none';
   stockEntries = [{qty: 1, price: ''}];
   renderStockEntries();
+  subCarEntries = [];
+  // Reset entry type to single
+  document.querySelectorAll('input[name="entry-type"]').forEach(r => {
+    r.closest('.pill-radio').classList.remove('selected');
+    if (r.value === 'single') { r.checked = true; r.closest('.pill-radio').classList.add('selected'); }
+  });
+  el('sub-cars-wrap').style.display = 'none';
+  el('f-name-label').textContent = 'Car Name / Model *';
+  el('f-name').placeholder = 'e.g. Ferrari 488 GTB';
 }
 
 function onSeriesChange() {
@@ -920,10 +961,64 @@ function onSeriesChange() {
 }
 function selectPill(pillEl, value) {
   if (!pillEl) return;
-  document.querySelectorAll('.pill-radio').forEach(p => p.classList.remove('selected'));
+  // Only deselect siblings within the same pill-group
+  pillEl.closest('.pill-group')?.querySelectorAll('.pill-radio').forEach(p => p.classList.remove('selected'));
   pillEl.classList.add('selected');
   const radio = pillEl.querySelector('input[type="radio"]');
   if (radio) radio.checked = true;
+}
+function selectEntryType(pillEl, type) {
+  if (!pillEl) return;
+  pillEl.closest('.pill-group')?.querySelectorAll('.pill-radio').forEach(p => p.classList.remove('selected'));
+  pillEl.classList.add('selected');
+  const radio = pillEl.querySelector('input[type="radio"]');
+  if (radio) radio.checked = true;
+  onEntryTypeChange(type);
+}
+function onEntryTypeChange(type) {
+  const isMulti = type === 'bundle' || type === 'series';
+  el('sub-cars-wrap').style.display = isMulti ? 'block' : 'none';
+  if (type === 'bundle') {
+    el('f-name-label').textContent = 'Pack / Bundle Name *';
+    el('f-name').placeholder = 'e.g. Hot Wheels 5-Pack 2024';
+    el('sub-cars-label').textContent = 'Cars in This Package';
+    el('sub-cars-hint').textContent = 'List each car model included in this multi-pack.';
+    el('f-series-price').checked = false;
+  } else if (type === 'series') {
+    el('f-name-label').textContent = 'Series Name *';
+    el('f-name').placeholder = 'e.g. Mainline 2024 Batch';
+    el('sub-cars-label').textContent = 'Cars in This Series';
+    el('sub-cars-hint').textContent = 'List each different car model in this series. The price covers all of them.';
+    el('f-series-price').checked = true;
+  } else {
+    el('f-name-label').textContent = 'Car Name / Model *';
+    el('f-name').placeholder = 'e.g. Ferrari 488 GTB';
+  }
+  if (isMulti && subCarEntries.length === 0) {
+    subCarEntries = [{name:''},{name:''}];
+    renderSubCars();
+  }
+}
+function renderSubCars() {
+  const wrap = el('sub-cars-list');
+  if (!wrap) return;
+  wrap.innerHTML = subCarEntries.map((e, i) => `
+    <div class="sub-car-row">
+      <span class="sub-car-num">${i+1}.</span>
+      <input type="text" class="fi" style="flex:1;" placeholder="Car model name" value="${h(e.name||'')}"
+        oninput="subCarEntries[${i}].name=this.value">
+      ${subCarEntries.length > 1
+        ? `<button class="sub-car-del" onclick="removeSubCar(${i})">✕</button>`
+        : '<div style="width:28px;"></div>'}
+    </div>`).join('');
+}
+function addSubCar() {
+  subCarEntries.push({name:''});
+  renderSubCars();
+}
+function removeSubCar(i) {
+  subCarEntries.splice(i, 1);
+  renderSubCars();
 }
 
 function renderStockEntries() {
@@ -1018,8 +1113,11 @@ async function saveCar() {
     let imageUrl = editId ? (cars.find(c=>c.id===editId)?.imageUrl||null) : null;
     if (imgDataUrl) imageUrl = imgDataUrl;
 
+    const entryType = document.querySelector('input[name="entry-type"]:checked')?.value || 'single';
     const data = {
       name,
+      entryType,
+      subCars: (entryType !== 'single') ? subCarEntries.filter(e => (e.name||'').trim()) : [],
       stockEntries: entries,
       totalStock,
       totalCost,
@@ -1080,6 +1178,14 @@ function showDetail(id) {
   } else {
     el('m-stock-entries-wrap').style.display = 'none';
   }
+  // Sub-cars (bundle / series)
+  if (c.subCars?.length > 0) {
+    el('m-subcars-wrap').style.display = 'block';
+    el('m-subcars-label').textContent = c.entryType === 'bundle' ? 'Cars in This Pack' : 'Cars in This Series';
+    el('m-subcars').innerHTML = c.subCars.map(s => `<div class="sub-car-item">${h(s.name)}</div>`).join('');
+  } else {
+    el('m-subcars-wrap').style.display = 'none';
+  }
   if (c.barcode) {
     try { JsBarcode('#m-bc-svg', c.barcode, {format:'CODE128',width:1.5,height:40,displayValue:true,fontSize:10,margin:6}); } catch(e) {}
     el('m-bc-val').textContent = c.barcode;
@@ -1099,6 +1205,15 @@ function editCar(id) {
   el('f-id').value     = id;
   el('add-title').textContent = 'Edit Car';
   el('f-name').value   = c.name||'';
+  // Restore entry type
+  const entType = c.entryType || 'single';
+  document.querySelectorAll('input[name="entry-type"]').forEach(r => {
+    r.closest('.pill-radio').classList.remove('selected');
+    if (r.value === entType) { r.checked = true; r.closest('.pill-radio').classList.add('selected'); }
+  });
+  subCarEntries = c.subCars?.length ? c.subCars.map(s => ({name: s.name||''})) : [];
+  onEntryTypeChange(entType);
+  if (subCarEntries.length > 0) renderSubCars();
   el('f-series').value = c.series||'';
   onSeriesChange();
   if (c.mainlineType) {
