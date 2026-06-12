@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>🔥 Hot Wheels ERP</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <style>
+    :root {
+      --red: #E8001A; --red-dark: #B0001A; --gold: #FFD700;
+      --bg: #0d0d0d; --card: #1a1a1a; --input: #242424; --border: #2e2e2e;
+      --text: #f0f0f0; --muted: #888; --green: #22c55e; --loss: #ef4444;
+      --sidebar: 220px; --nav-h: 62px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); text-transform: uppercase; letter-spacing: 0.3px; }
+    input, textarea, select, code, .code-tag, .bc-val, #m-bc-val { text-transform: none !important; letter-spacing: normal; }
+
+    /* STOCK ENTRIES */
+    .se-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; width: 100%; min-width: 0; }
+    .se-qty { width: 68px !important; min-width: 68px; flex-shrink: 0; }
+    .se-x { color: var(--muted); font-size: 13px; flex-shrink: 0; white-space: nowrap; }
+    .se-price { flex: 1; min-width: 0; }
+    .se-del { background: transparent; border: 1px solid var(--border); color: var(--muted); border-radius: 7px; width: 28px; height: 36px; cursor: pointer; font-size: 14px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+    .se-del:hover { color: var(--loss); border-color: var(--loss); }
+    .stock-summary { font-size: 12px; color: var(--muted); background: var(--input); border-radius: 8px; padding: 8px 12px; margin-top: 4px; display: flex; gap: 16px; flex-wrap: wrap; }
+    .stock-summary b { color: var(--text); }
+    .series-price-toggle { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding: 9px 12px; background: var(--input); border-radius: 9px; cursor: pointer; font-size: 12px; font-weight: 600; user-select: none; }
+    .series-price-toggle input { accent-color: var(--red); width: 15px; height: 15px; cursor: pointer; }
+    .stock-badge { display: inline-block; background: rgba(232,0,26,0.15); color: var(--red); border-radius: 20px; font-size: 11px; font-weight: 700; padding: 1px 7px; margin-left: 5px; }
+    .series-badge { display: inline-block; background: rgba(255,215,0,0.15); color: var(--gold); border-radius: 20px; font-size: 10px; font-weight: 700; padding: 1px 6px; margin-left: 4px; text-transform: uppercase; }
+
+    /* SERIES TYPE PILLS */
+    .pill-group { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+    .pill-radio { display: inline-flex; align-items: center; gap: 6px; padding: 6px 13px; background: var(--input); border: 1px solid var(--border); border-radius: 20px; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.15s; user-select: none; text-transform: uppercase; letter-spacing: 0.3px; }
+    .pill-radio:hover { border-color: var(--red); color: var(--red); }
+    .pill-radio input { display: none; }
+    .pill-radio.selected { background: rgba(232,0,26,0.15); border-color: var(--red); color: var(--red); }
+
+    /* LAYOUT */
+    #app { min-height: 100vh; }
+    .layout { display: flex; min-height: 100vh; }
+
+    /* SIDEBAR */
+    .sidebar { width: var(--sidebar); background: var(--card); border-right: 1px solid var(--border); position: fixed; top: 0; left: 0; height: 100vh; display: flex; flex-direction: column; z-index: 200; }
+    .sidebar-head { padding: 24px 20px 20px; border-bottom: 1px solid var(--border); }
+    .sidebar-head h1 { font-size: 17px; font-weight: 800; color: var(--red); }
+    .sidebar-head p { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .nav { flex: 1; padding: 12px 0; overflow-y: auto; }
+    .nav-item { display: flex; align-items: center; gap: 10px; padding: 11px 20px; cursor: pointer; color: var(--muted); font-size: 13px; transition: all 0.15s; border-right: 3px solid transparent; user-select: none; }
+    .nav-item:hover { color: var(--text); background: rgba(255,255,255,0.04); }
+    .nav-item.active { color: var(--red); background: rgba(232,0,26,0.1); border-right-color: var(--red); }
+    .nav-item .ni { font-size: 17px; width: 22px; text-align: center; flex-shrink: 0; }
+    .sidebar-foot { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+    .sidebar-foot button { font-size: 11px; padding: 6px 10px; }
+
+    /* MAIN */
+    .main { margin-left: var(--sidebar); flex: 1; padding: 32px; min-width: 0; }
+    .ph { display: flex; align-items: center; justify-content: space-between; margin-bottom: 28px; flex-wrap: wrap; gap: 12px; }
+    .ph h2 { font-size: 22px; font-weight: 800; }
+
+    /* STATS */
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 28px; }
+    .stat { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+    .stat .lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat .val { font-size: 26px; font-weight: 800; margin-top: 8px; }
+    .val-red { color: var(--red); } .val-green { color: var(--green); }
+    .val-profit { color: var(--green); } .val-loss { color: var(--loss); }
+
+    /* CARD */
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 20px; }
+    .card-title { font-size: 14px; font-weight: 700; margin-bottom: 16px; }
+
+    /* BUTTONS */
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; border-radius: 9px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.15s; line-height: 1; text-transform: uppercase; letter-spacing: 0.3px; }
+    .btn-primary { background: var(--red); color: #fff; }
+    .btn-primary:hover { background: var(--red-dark); }
+    .btn-outline { background: transparent; color: var(--text); border: 1px solid var(--border); }
+    .btn-outline:hover { border-color: var(--red); color: var(--red); }
+    .btn-ghost { background: transparent; color: var(--muted); border: none; }
+    .btn-ghost:hover { color: var(--text); background: var(--input); }
+    .btn-danger { background: rgba(239,68,68,0.15); color: var(--loss); border: 1px solid rgba(239,68,68,0.3); }
+    .btn-danger:hover { background: rgba(239,68,68,0.25); }
+    .btn-sm { padding: 6px 11px; font-size: 11px; border-radius: 7px; }
+    .btn-full { width: 100%; justify-content: center; }
+    .btn-row { display: flex; gap: 8px; }
+
+    /* FORM */
+    .fg { margin-bottom: 18px; }
+    .fg label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; font-weight: 500; }
+    .fi { width: 100%; padding: 10px 13px; background: var(--input); border: 1px solid var(--border); border-radius: 9px; color: var(--text); font-size: 14px; outline: none; transition: border-color 0.15s; }
+    .fi:focus { border-color: var(--red); }
+    textarea.fi { resize: vertical; min-height: 72px; font-family: inherit; }
+    .frow { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    /* SEARCH */
+    .search-row { display: flex; gap: 10px; margin-bottom: 18px; }
+    .search-row .fi { flex: 1; }
+    .search-row select.fi { max-width: 170px; }
+
+    /* TABLE */
+    .tbl-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { text-align: left; padding: 10px 14px; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--border); }
+    td { padding: 13px 14px; border-bottom: 1px solid rgba(255,255,255,0.04); vertical-align: middle; }
+    tr:hover td { background: rgba(255,255,255,0.02); cursor: pointer; }
+    .thumb { width: 52px; height: 38px; object-fit: cover; border-radius: 7px; display: block; }
+    .thumb-ph { width: 52px; height: 38px; background: var(--input); border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+    .code-tag { font-family: monospace; font-size: 11px; background: var(--input); padding: 2px 6px; border-radius: 5px; color: var(--muted); }
+    .badge { display: inline-block; padding: 2px 7px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .badge-up { background: rgba(34,197,94,0.15); color: var(--green); }
+    .badge-dn { background: rgba(239,68,68,0.15); color: var(--loss); }
+    .profit { color: var(--green); font-weight: 600; }
+    .loss { color: var(--loss); font-weight: 600; }
+
+    /* EMPTY */
+    .empty { text-align: center; padding: 60px 20px; color: var(--muted); }
+    .empty .ei { font-size: 52px; margin-bottom: 14px; }
+    .empty p { font-size: 14px; margin-bottom: 18px; }
+
+    /* IMAGE UPLOAD */
+    .img-upload-btns { display: flex; gap: 8px; }
+    .img-upload-btns .btn { flex: 1; justify-content: center; }
+    .img-preview-wrap { position: relative; margin-bottom: 10px; }
+    .img-preview-wrap img { width: 100%; max-height: 220px; object-fit: contain; border-radius: 10px; background: var(--input); display: block; }
+    .img-clear { position: absolute; top: 8px; right: 8px; background: rgba(0,0,0,0.7); color: #fff; border: none; border-radius: 50%; width: 28px; height: 28px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+
+    /* BARCODE */
+    .bc-box { background: #fff; border-radius: 10px; padding: 14px 16px; text-align: center; }
+    .bc-val { font-family: monospace; font-size: 11px; color: #666; margin-top: 4px; }
+
+    /* RECENT */
+    .recent-item { display: flex; align-items: center; gap: 12px; padding: 11px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+    .recent-item:last-child { border-bottom: none; }
+    .recent-info { flex: 1; min-width: 0; }
+    .recent-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .recent-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* VIEWS */
+    .view { display: none; }
+    .view.active { display: block; }
+
+    /* MODAL */
+    .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 500; display: none; align-items: center; justify-content: center; padding: 16px; backdrop-filter: blur(3px); }
+    .modal-bg.open { display: flex; }
+    .modal { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 26px; width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto; }
+    .modal-hd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+    .modal-title { font-size: 18px; font-weight: 800; }
+    .modal-close { background: var(--input); border: none; color: var(--muted); border-radius: 50%; width: 30px; height: 30px; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .modal-close:hover { color: var(--text); }
+    .car-img-full { width: 100%; max-height: 240px; object-fit: contain; border-radius: 12px; background: var(--input); display: block; margin-bottom: 18px; }
+    .car-img-ph { width: 100%; height: 130px; background: var(--input); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 52px; margin-bottom: 18px; }
+    .detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .di-lbl { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 3px; }
+    .di-val { font-size: 15px; font-weight: 700; }
+
+    /* SCANNER */
+    #reader { border-radius: 12px; overflow: hidden; }
+
+    /* LABELS */
+    .label-select-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px; margin-top: 14px; }
+    .lbl-check { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--input); border-radius: 8px; cursor: pointer; font-size: 12px; }
+    .lbl-check input { accent-color: var(--red); }
+    .label-print-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; margin-top: 20px; }
+    .label-card { background: #fff; color: #000; border-radius: 10px; padding: 12px; text-align: center; page-break-inside: avoid; }
+    .label-car-name { font-size: 11px; font-weight: 700; margin-bottom: 6px; color: #000; }
+    .label-car-img { width: 60px; height: 45px; object-fit: contain; display: block; margin: 0 auto 6px; }
+    .label-price { font-size: 10px; color: #555; margin-top: 5px; }
+
+    /* TOAST */
+    #toast { position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 10px 18px; font-size: 13px; z-index: 9999; opacity: 0; transition: all 0.25s; white-space: nowrap; pointer-events: none; }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* LOADING */
+    #loading { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 9998; display: none; align-items: center; justify-content: center; }
+    #loading.show { display: flex; }
+    .spinner { width: 42px; height: 42px; border: 3px solid var(--border); border-top-color: var(--red); border-radius: 50%; animation: spin 0.75s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* MOBILE NAV */
+    .mnav { display: none; position: fixed; bottom: 0; left: 0; right: 0; height: var(--nav-h); background: var(--card); border-top: 1px solid var(--border); z-index: 200; }
+    .mnav-inner { display: flex; height: 100%; }
+    .mni { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; cursor: pointer; color: var(--muted); font-size: 10px; transition: color 0.15s; }
+    .mni .ni { font-size: 22px; }
+    .mni.active { color: var(--red); }
+
+    /* RESPONSIVE */
+    @media (max-width: 900px) { .stats { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 680px) {
+      .sidebar { display: none; }
+      .main { margin-left: 0; padding: 18px 14px calc(var(--nav-h) + 18px); }
+      .mnav { display: block; }
+      .frow { grid-template-columns: 1fr; }
+      .stats { grid-template-columns: 1fr 1fr; gap: 10px; }
+      table th:nth-child(4), table td:nth-child(4),
+      table th:nth-child(5), table td:nth-child(5),
+      table th:nth-child(6), table td:nth-child(6) { display: none; }
+    }
+    @media (max-width: 400px) { .stats { grid-template-columns: 1fr; } }
+
+    /* SYNC STATUS */
+    .sync-dot { width: 8px; height: 8px; border-radius: 50%; margin-left: auto; flex-shrink: 0; }
+    .sync-off  { background: var(--muted); }
+    .sync-ok   { background: var(--green); box-shadow: 0 0 5px var(--green); }
+    .sync-busy { background: var(--gold); animation: pulse 1s infinite; }
+    .sync-err  { background: var(--loss); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+    .sync-status-row { display:flex; align-items:center; gap:8px; font-size:11px; color:var(--muted); margin-bottom:10px; }
+
+    /* PRINT */
+    @media print {
+      .sidebar, .mnav, .no-print { display: none !important; }
+      .main { margin: 0; padding: 0; }
+      .label-print-grid { grid-template-columns: repeat(3, 1fr); gap: 4mm; }
+      .label-card { border: 1px solid #ccc; }
+    }
+  </style>
+</head>
+<body>
+
+<div id="app">
+  <div class="layout">
+
+    <!-- Sidebar -->
+    <nav class="sidebar">
+      <div class="sidebar-head">
+        <h1>🔥 Hot Wheels ERP</h1>
+        <p id="sb-count">0 cars in collection</p>
+      </div>
+      <div class="nav">
+        <div class="nav-item active" data-view="dashboard" onclick="nav('dashboard')"><span class="ni">📊</span> Dashboard</div>
+        <div class="nav-item" data-view="inventory" onclick="nav('inventory')"><span class="ni">📦</span> Inventory</div>
+        <div class="nav-item" data-view="add" onclick="nav('add')"><span class="ni">➕</span> Add Car</div>
+        <div class="nav-item" data-view="scan" onclick="nav('scan')"><span class="ni">📷</span> Scan Barcode</div>
+        <div class="nav-item" data-view="labels" onclick="nav('labels')"><span class="ni">🏷️</span> Print Labels</div>
+        <div class="nav-item" onclick="openXianyuModal()" style="margin-top:8px;border-top:1px solid var(--border);padding-top:16px;"><span class="ni">🔍</span> 闲鱼 Search</div>
+        <div class="nav-item" onclick="openSyncModal()"><span class="ni">☁️</span> Cloud Sync <span id="sync-dot" class="sync-dot sync-off"></span></div>
+      </div>
+      <div class="sidebar-foot">
+        <button class="btn btn-outline btn-sm" onclick="exportData()">⬇️ Export Backup</button>
+        <label class="btn btn-outline btn-sm" style="justify-content:center;cursor:pointer;">
+          ⬆️ Import Backup
+          <input type="file" accept=".json" onchange="importData(event)" style="display:none">
+        </label>
+      </div>
+    </nav>
+
+    <main class="main">
+
+      <!-- Dashboard -->
+      <div id="view-dashboard" class="view active">
+        <div class="ph">
+          <h2>Dashboard</h2>
+          <button class="btn btn-primary" onclick="nav('add')">＋ Add Car</button>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="lbl">Total Cars</div><div class="val val-red" id="s-total">0</div></div>
+          <div class="stat"><div class="lbl">Total Cost</div><div class="val" id="s-cost">¥0</div></div>
+          <div class="stat"><div class="lbl">Est. Resale</div><div class="val val-green" id="s-resale">¥0</div></div>
+          <div class="stat"><div class="lbl">Profit / Loss</div><div class="val" id="s-pl">¥0</div></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Recent Additions</div>
+          <div id="recent-list"></div>
+        </div>
+      </div>
+
+      <!-- Inventory -->
+      <div id="view-inventory" class="view">
+        <div class="ph">
+          <h2>Inventory</h2>
+          <button class="btn btn-primary" onclick="nav('add')">＋ Add Car</button>
+        </div>
+        <div class="search-row">
+          <input type="search" class="fi" id="q" placeholder="🔍  Search name, code, series…" oninput="renderTable()">
+          <select class="fi" id="sort" onchange="renderTable()">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="name">Name A–Z</option>
+            <option value="price-hi">Price ↓</option>
+            <option value="price-lo">Price ↑</option>
+          </select>
+        </div>
+        <div class="card">
+          <div class="tbl-wrap">
+            <table>
+              <thead><tr><th></th><th>Name</th><th>Code</th><th>Purchase (¥)</th><th>Condition</th><th>Est. Resale (¥)</th><th>P / L</th><th></th></tr></thead>
+              <tbody id="tbl-body"></tbody>
+            </table>
+          </div>
+          <div id="tbl-empty" class="empty" style="display:none;">
+            <div class="ei">🏎️</div>
+            <p>No cars yet — add your first Hot Wheels!</p>
+            <button class="btn btn-primary" onclick="nav('add')">Add First Car</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Add / Edit -->
+      <div id="view-add" class="view">
+        <div class="ph"><h2 id="add-title">Add New Car</h2></div>
+        <div style="max-width:680px;">
+          <div class="card">
+            <input type="hidden" id="f-id">
+            <div class="frow">
+              <div class="fg"><label>Car Name / Model *</label><input id="f-name" class="fi" placeholder="e.g. Ferrari 488 GTB"></div>
+              <div class="fg">
+                <label>Series / Collection</label>
+                <select id="f-series" class="fi" onchange="onSeriesChange()">
+                  <option value="">— Select Series —</option>
+                  <option value="Mainline Series">Mainline Series</option>
+                  <option value="Silver Series">Silver Series</option>
+                  <option value="Premium Series">Premium Series</option>
+                  <option value="Specialty Lines">Specialty Lines</option>
+                </select>
+                <div id="f-mainline-wrap" style="display:none;margin-top:10px;">
+                  <div style="font-size:11px;color:var(--muted);margin-bottom:6px;">Mainline Type</div>
+                  <div class="pill-group">
+                    <label class="pill-radio selected" onclick="selectPill(this,'Regular')"><input type="radio" name="mainline-type" value="Regular" checked>Regular</label>
+                    <label class="pill-radio" onclick="selectPill(this,'TH')"><input type="radio" name="mainline-type" value="TH">🔥 Treasure Hunt (TH)</label>
+                    <label class="pill-radio" onclick="selectPill(this,'STH')"><input type="radio" name="mainline-type" value="STH">⭐ Super TH (STH)</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="fg">
+              <label>Purchase Entries *</label>
+              <div id="stock-entries-wrap"></div>
+              <button type="button" class="btn btn-outline btn-sm" onclick="addStockEntry()" style="margin-top:2px;">＋ Add Another Entry</button>
+              <div id="stock-summary" class="stock-summary" style="display:none;"></div>
+              <label class="series-price-toggle">
+                <input type="checkbox" id="f-series-price" onchange="updateStockSummary()">
+                💰 Full series price — this total covers an entire series/set of cars
+              </label>
+            </div>
+            <div class="fg"><label>Est. Resale Value (¥ per unit, CNY)</label><input id="f-resale" class="fi" type="number" min="0" step="0.01" placeholder="0.00"></div>
+            <div class="frow">
+              <div class="fg"><label>Color</label><input id="f-color" class="fi" placeholder="e.g. Red Metallic"></div>
+              <div class="fg"><label>Condition</label>
+                <select id="f-cond" class="fi">
+                  <option value="mint">✨ Mint (Sealed)</option>
+                  <option value="near-mint">⭐ Near Mint</option>
+                  <option value="good">👍 Good</option>
+                  <option value="played">🎮 Played</option>
+                </select>
+              </div>
+            </div>
+            <div class="fg"><label>Notes</label><textarea id="f-notes" class="fi" placeholder="Any notes…"></textarea></div>
+            <div class="fg">
+              <label>Car Photo</label>
+              <input type="file" id="file-in" accept="image/*" style="display:none" onchange="onImgSelect(event)">
+              <div id="upload-preview" class="img-preview-wrap" style="display:none;">
+                <img id="preview-img" src="" alt="Preview">
+                <button class="img-clear" onclick="clearImg(event)">✕</button>
+              </div>
+              <div id="upload-ph" class="img-upload-btns">
+                <button type="button" class="btn btn-outline" onclick="document.getElementById('file-in').click()">🖼️ Upload from Gallery</button>
+                <button type="button" class="btn btn-outline" onclick="openCameraModal()">📷 Take Photo</button>
+              </div>
+            </div>
+            <div class="fg">
+              <label>Barcode</label>
+              <input id="f-barcode" class="fi" placeholder="Type your barcode number / code" oninput="previewBarcode(this.value)">
+              <div id="bc-preview-wrap" style="display:none;margin-top:10px;">
+                <div class="bc-box"><svg id="bc-svg"></svg><div id="bc-val" class="bc-val"></div></div>
+              </div>
+            </div>
+            <div class="btn-row" style="margin-top:8px;">
+              <button class="btn btn-primary" style="flex:1;" onclick="saveCar()">💾 Save Car</button>
+              <button class="btn btn-outline" onclick="nav('inventory')">Cancel</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Scan -->
+      <div id="view-scan" class="view">
+        <div class="ph"><h2>Scan Barcode</h2></div>
+        <div style="max-width:500px;">
+          <div class="card" style="margin-bottom:14px;">
+            <p style="font-size:13px;color:var(--muted);margin-bottom:14px;">Point your camera at a Hot Wheels barcode label to look it up or add it.</p>
+            <button id="btn-scan-start" class="btn btn-primary btn-full" onclick="startScan()">📷 Start Camera</button>
+            <button id="btn-scan-stop" class="btn btn-outline btn-full" style="display:none;" onclick="stopScan()">⏹ Stop Camera</button>
+          </div>
+          <div id="reader" style="display:none;"></div>
+          <div id="scan-result" class="card" style="display:none;margin-top:14px;"></div>
+        </div>
+      </div>
+
+      <!-- Labels -->
+      <div id="view-labels" class="view">
+        <div class="ph no-print">
+          <h2>Print Labels</h2>
+          <button class="btn btn-primary no-print" onclick="window.print()">🖨️ Print</button>
+        </div>
+        <div class="card no-print" style="margin-bottom:16px;">
+          <div style="font-size:13px;color:var(--muted);margin-bottom:10px;">Choose which cars to include:</div>
+          <div class="btn-row">
+            <button class="btn btn-outline btn-sm" onclick="selAll()">Select All</button>
+            <button class="btn btn-outline btn-sm" onclick="deselAll()">Clear</button>
+          </div>
+          <div id="lbl-sel" class="label-select-grid"></div>
+        </div>
+        <div id="lbl-print" class="label-print-grid"></div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Mobile Nav -->
+  <nav class="mnav">
+    <div class="mnav-inner">
+      <div class="mni active" data-view="dashboard" onclick="nav('dashboard')"><span class="ni">📊</span>Home</div>
+      <div class="mni" data-view="inventory" onclick="nav('inventory')"><span class="ni">📦</span>Stock</div>
+      <div class="mni" data-view="add" onclick="nav('add')"><span class="ni">➕</span>Add</div>
+      <div class="mni" data-view="scan" onclick="nav('scan')"><span class="ni">📷</span>Scan</div>
+      <div class="mni" data-view="labels" onclick="nav('labels')"><span class="ni">🏷️</span>Labels</div>
+      <div class="mni" onclick="openXianyuModal()"><span class="ni">🔍</span>闲鱼</div>
+      <div class="mni" onclick="openSyncModal()"><span class="ni">☁️</span>Sync</div>
+    </div>
+  </nav>
+</div>
+
+<!-- Detail Modal -->
+<div id="modal-detail" class="modal-bg">
+  <div class="modal">
+    <div class="modal-hd">
+      <span class="modal-title" id="m-name"></span>
+      <button class="modal-close" onclick="closeModal()">✕</button>
+    </div>
+    <img id="m-img" class="car-img-full" style="display:none;" src="" alt="">
+    <div id="m-img-ph" class="car-img-ph">🏎️</div>
+    <div class="detail-grid">
+      <div><div class="di-lbl">Total Cost</div><div class="di-val" id="m-price"></div></div>
+      <div><div class="di-lbl">Est. Resale (per unit)</div><div class="di-val" id="m-resale"></div></div>
+      <div><div class="di-lbl">Profit / Loss</div><div class="di-val" id="m-pl"></div></div>
+      <div><div class="di-lbl">Stock</div><div class="di-val" id="m-stock"></div></div>
+      <div><div class="di-lbl">Condition</div><div class="di-val" id="m-cond"></div></div>
+      <div><div class="di-lbl">Color</div><div class="di-val" id="m-color"></div></div>
+      <div style="grid-column:1/-1;"><div class="di-lbl">Series</div><div class="di-val" id="m-series"></div></div>
+    </div>
+    <div id="m-stock-entries-wrap" style="display:none;margin-top:14px;">
+      <div class="di-lbl" style="margin-bottom:6px;">Purchase Breakdown</div>
+      <div id="m-stock-entries" style="font-size:13px;color:var(--muted);"></div>
+    </div>
+    <div style="margin-top:16px;">
+      <div class="di-lbl" style="margin-bottom:6px;">Barcode</div>
+      <div class="bc-box"><svg id="m-bc-svg"></svg><div id="m-bc-val" class="bc-val"></div></div>
+    </div>
+    <div id="m-notes-wrap" style="display:none;margin-top:14px;">
+      <div class="di-lbl" style="margin-bottom:4px;">Notes</div>
+      <p id="m-notes" style="font-size:13px;color:var(--muted);line-height:1.6;"></p>
+    </div>
+    <div class="btn-row" style="margin-top:20px;">
+      <button class="btn btn-outline" style="flex:1;" id="m-edit-btn">✏️ Edit</button>
+      <button class="btn btn-danger" id="m-del-btn">🗑️ Delete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Camera Modal -->
+<div id="modal-camera" class="modal-bg">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-hd">
+      <span class="modal-title">📷 Take Photo</span>
+      <button class="modal-close" onclick="closeCameraModal()">✕</button>
+    </div>
+    <video id="cam-video" autoplay playsinline style="width:100%;border-radius:12px;background:#000;display:block;"></video>
+    <canvas id="cam-canvas" style="display:none;"></canvas>
+    <div class="btn-row" style="margin-top:14px;">
+      <button class="btn btn-primary" style="flex:1;font-size:16px;" onclick="capturePhoto()">⭕ Capture</button>
+      <button class="btn btn-outline" onclick="closeCameraModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- Cloud Sync Modal -->
+<div id="modal-sync" class="modal-bg">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-hd">
+      <span class="modal-title">☁️ Cloud Sync (GitHub)</span>
+      <button class="modal-close" onclick="closeSyncModal()">✕</button>
+    </div>
+    <div id="sync-status-wrap" class="sync-status-row">
+      <span id="sync-status-dot" class="sync-dot sync-off"></span>
+      <span id="sync-status-text">Not configured — local only</span>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.8;">
+      Your inventory is stored as a private GitHub Gist — free, reliable, syncs across all devices.<br>
+      <b style="color:var(--text);">Setup (one time):</b><br>
+      1. Go to <a href="https://github.com" target="_blank" style="color:var(--red);">github.com</a> and sign up / log in<br>
+      2. Click your avatar → <b>Settings</b> → <b>Developer settings</b> → <b>Personal access tokens</b> → <b>Tokens (classic)</b><br>
+      3. <b>Generate new token (classic)</b> → tick <b>gist</b> scope only → Generate<br>
+      4. Copy the token and paste below
+    </p>
+    <div class="fg">
+      <label>GitHub Personal Access Token</label>
+      <input id="gh-token-input" class="fi" type="password" placeholder="ghp_...">
+    </div>
+    <div id="sync-connected-info" style="display:none;margin-bottom:14px;padding:10px 12px;background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.2);border-radius:9px;font-size:12px;color:var(--green);">
+      ✅ Connected · Gist ID: <span id="sync-bin-id" style="font-family:monospace;font-size:11px;word-break:break-all;"></span>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" style="flex:1;" onclick="saveSyncKey()">💾 Save &amp; Connect</button>
+      <button class="btn btn-danger btn-sm" id="sync-disconnect-btn" style="display:none;" onclick="disconnectSync()">Disconnect</button>
+    </div>
+    <div id="sync-force-row" style="display:none;margin-top:10px;gap:8px;flex-direction:column;">
+      <button class="btn btn-outline btn-full" onclick="forcePush()">⬆️ Force Push Local → Cloud</button>
+      <button class="btn btn-outline btn-full" onclick="forcePull()">⬇️ Force Pull Cloud → Local</button>
+    </div>
+    <p style="font-size:11px;color:var(--muted);margin-top:12px;">Token is stored only in this browser. Data syncs automatically on every save.</p>
+  </div>
+</div>
+
+<!-- 闲鱼 Search Modal -->
+<div id="modal-xianyu" class="modal-bg">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-hd">
+      <span class="modal-title">🔍 闲鱼 Price Search</span>
+      <button class="modal-close" onclick="closeXianyuModal()">✕</button>
+    </div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:14px;">Enter a car name to search real sold prices on 闲鱼 (Xianyu/Goofish).</p>
+    <div class="fg">
+      <label>Car Name / Model</label>
+      <input id="xy-input" class="fi" placeholder="e.g. Ferrari 488 GTB" onkeydown="if(event.key==='Enter')doXianyuSearch()">
+    </div>
+    <button class="btn btn-primary btn-full" onclick="doXianyuSearch()">🔍 Search 闲鱼</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="loading"><div class="spinner"></div></div>
+
+<script>
+// ═══════════════════════════════
+//  STATE
+// ═══════════════════════════════
+const STORE_KEY   = 'hw_erp_cars';
+const GH_TOKEN_K  = 'hw_gh_token';
+const GH_GIST_K   = 'hw_gh_gist';
+const GH_FILE     = 'hotwheels-erp.json';
+let cars = [];
+let ghToken = '';
+let ghGistId = '';
+let imgFile = null, imgDataUrl = null;
+let currentBC = null;
+let detailId = null;
+let scanner = null;
+let selLabels = new Set();
+let stockEntries = [{qty: 1, price: ''}];
+
+// ═══════════════════════════════
+//  BOOT
+// ═══════════════════════════════
+window.addEventListener('load', async () => {
+  try { cars = JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); } catch(e) { cars = []; }
+  ghToken   = localStorage.getItem(GH_TOKEN_K) || '';
+  ghGistId  = localStorage.getItem(GH_GIST_K)  || '';
+  renderStockEntries();
+  refreshUI();
+  if (ghToken && ghGistId) {
+    setSyncDot('busy');
+    try { await fetchFromGist(); setSyncDot('ok'); }
+    catch(e) { setSyncDot('err'); toast('⚠️ Cloud sync failed — using local data'); }
+  }
+});
+
+// ═══════════════════════════════
+//  DATA
+// ═══════════════════════════════
+function save() {
+  localStorage.setItem(STORE_KEY, JSON.stringify(cars));
+}
+function dbAdd(data) {
+  const car = { id: 'hw_' + Date.now(), createdAt: new Date().toISOString(), ...data };
+  cars.unshift(car);
+  save();
+  syncToGist();
+  return car;
+}
+function dbUpdate(id, data) {
+  const i = cars.findIndex(c => c.id === id);
+  if (i >= 0) { cars[i] = { ...cars[i], ...data }; save(); syncToGist(); }
+}
+function dbDelete(id) {
+  cars = cars.filter(c => c.id !== id);
+  save();
+  syncToGist();
+}
+
+// ═══════════════════════════════
+//  GITHUB GIST SYNC
+// ═══════════════════════════════
+function setSyncDot(state) {
+  const cls = {ok:'sync-ok',busy:'sync-busy',err:'sync-err',off:'sync-off'};
+  const labels = {ok:'Synced ✓', busy:'Syncing…', err:'Sync error — check token', off:'Not configured — local only'};
+  ['sync-dot','sync-status-dot'].forEach(id => { const e=el(id); if(e) e.className='sync-dot '+(cls[state]||'sync-off'); });
+  const st = el('sync-status-text'); if(st) st.textContent = labels[state]||'';
+}
+function ghHeaders() {
+  return {'Authorization':'Bearer '+ghToken,'Accept':'application/vnd.github+json','Content-Type':'application/json'};
+}
+async function fetchFromGist() {
+  const res = await fetch('https://api.github.com/gists/'+ghGistId, {headers: ghHeaders()});
+  if (!res.ok) throw new Error('Fetch failed: '+res.status);
+  const data = await res.json();
+  const content = data.files?.[GH_FILE]?.content;
+  if (content) {
+    const parsed = JSON.parse(content);
+    if (Array.isArray(parsed.cars) && parsed.cars.length > 0) {
+      cars = parsed.cars; save(); refreshUI();
+    } else if (cars.length > 0) {
+      // Remote is empty but we have local data — push local up
+      await syncToGist();
+    }
+  }
+}
+async function syncToGist() {
+  if (!ghToken || !ghGistId) return;
+  setSyncDot('busy');
+  try {
+    const res = await fetch('https://api.github.com/gists/'+ghGistId, {
+      method:'PATCH', headers: ghHeaders(),
+      body: JSON.stringify({files:{[GH_FILE]:{content:JSON.stringify({cars})}}})
+    });
+    if (!res.ok) throw new Error(res.status);
+    setSyncDot('ok');
+  } catch(e) { setSyncDot('err'); }
+}
+async function findExistingGist() {
+  const res = await fetch('https://api.github.com/gists?per_page=100', {headers: ghHeaders()});
+  if (!res.ok) return null;
+  const gists = await res.json();
+  return gists.find(g => g.files?.[GH_FILE])?.id || null;
+}
+async function createGist() {
+  const res = await fetch('https://api.github.com/gists', {
+    method:'POST', headers: ghHeaders(),
+    body: JSON.stringify({description:'HotWheels ERP Inventory',public:false,files:{[GH_FILE]:{content:JSON.stringify({cars})}}})
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(()=>({}));
+    throw new Error('GitHub error '+res.status+': '+(err.message||'Check your token has gist scope'));
+  }
+  const data = await res.json();
+  return data.id;
+}
+
+// Sync modal
+function openSyncModal() {
+  el('gh-token-input').value = ghToken;
+  el('sync-connected-info').style.display = ghGistId ? 'block' : 'none';
+  el('sync-bin-id').textContent = ghGistId;
+  el('sync-disconnect-btn').style.display = ghGistId ? 'inline-flex' : 'none';
+  el('sync-force-row').style.display = ghGistId ? 'flex' : 'none';
+  el('modal-sync').classList.add('open');
+}
+function closeSyncModal() { el('modal-sync').classList.remove('open'); }
+async function saveSyncKey() {
+  const token = el('gh-token-input').value.trim();
+  if (!token) { toast('⚠️ Paste your GitHub token first'); return; }
+  loading(true);
+  try {
+    ghToken = token;
+    localStorage.setItem(GH_TOKEN_K, token);
+    if (!ghGistId) {
+      toast('🔄 Looking for existing Gist…');
+      const existing = await findExistingGist();
+      if (existing) {
+        ghGistId = existing;
+        localStorage.setItem(GH_GIST_K, ghGistId);
+        await fetchFromGist();
+      } else {
+        toast('🔄 Creating your private Gist…');
+        ghGistId = await createGist();
+        localStorage.setItem(GH_GIST_K, ghGistId);
+      }
+    } else {
+      await fetchFromGist();
+    }
+    setSyncDot('ok');
+    el('sync-connected-info').style.display = 'block';
+    el('sync-bin-id').textContent = ghGistId;
+    el('sync-disconnect-btn').style.display = 'inline-flex';
+    el('sync-force-row').style.display = 'flex';
+    toast('✅ Cloud sync connected via GitHub!');
+    closeSyncModal();
+  } catch(e) {
+    setSyncDot('err');
+    toast('❌ ' + e.message);
+  } finally { loading(false); }
+}
+async function forcePush() {
+  if (!ghToken || !ghGistId) { toast('⚠️ Not connected'); return; }
+  if (!confirm('Push ALL local data to cloud? This overwrites the remote copy.')) return;
+  loading(true);
+  try { await syncToGist(); toast('✅ Local data pushed to cloud!'); }
+  catch(e) { toast('❌ ' + e.message); }
+  finally { loading(false); }
+}
+async function forcePull() {
+  if (!ghToken || !ghGistId) { toast('⚠️ Not connected'); return; }
+  if (!confirm('Pull cloud data to this device? This overwrites your local copy.')) return;
+  loading(true);
+  try {
+    const res = await fetch('https://api.github.com/gists/'+ghGistId, {headers: ghHeaders()});
+    if (!res.ok) throw new Error('Fetch failed: '+res.status);
+    const data = await res.json();
+    const content = data.files?.[GH_FILE]?.content;
+    if (content) {
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed.cars)) { cars = parsed.cars; save(); refreshUI(); toast('✅ Cloud data pulled to this device!'); }
+      else { toast('⚠️ Cloud data is empty — nothing to pull'); }
+    } else { toast('⚠️ No data found in cloud'); }
+  } catch(e) { toast('❌ ' + e.message); }
+  finally { loading(false); }
+}
+function disconnectSync() {
+  if (!confirm('Disconnect cloud sync? Your local data stays intact.')) return;
+  ghToken = ''; ghGistId = '';
+  localStorage.removeItem(GH_TOKEN_K);
+  localStorage.removeItem(GH_GIST_K);
+  setSyncDot('off');
+  el('sync-connected-info').style.display = 'none';
+  el('sync-disconnect-btn').style.display = 'none';
+  el('sync-force-row').style.display = 'none';
+  el('gh-token-input').value = '';
+  toast('🔌 Disconnected from cloud sync');
+  closeSyncModal();
+}
+
+// ═══════════════════════════════
+//  EXPORT / IMPORT
+// ═══════════════════════════════
+function exportData() {
+  const json = JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), cars }, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'hotwheels-backup-' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  toast('✅ Backup downloaded!');
+}
+function importData(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      const imported = data.cars || data;
+      if (!Array.isArray(imported)) throw new Error('Invalid file');
+      if (!confirm(`Import ${imported.length} cars? This will REPLACE your current data.`)) return;
+      cars = imported;
+      save();
+      refreshUI();
+      toast('✅ ' + imported.length + ' cars imported!');
+    } catch(err) {
+      toast('❌ Invalid backup file');
+    }
+  };
+  reader.readAsText(file);
+  evt.target.value = '';
+}
+
+// ═══════════════════════════════
+//  IMAGE COMPRESSION
+// ═══════════════════════════════
+function compressImage(src) {
+  return new Promise(res => {
+    const img = new Image();
+    img.onload = () => {
+      const MAX = 400;
+      let w = img.width, h = img.height;
+      if (w > MAX) { h = Math.round(h * MAX / w); w = MAX; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      res(canvas.toDataURL('image/jpeg', 0.75));
+    };
+    img.src = src;
+  });
+}
+
+// ═══════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════
+function nav(view) {
+  document.querySelectorAll('.view').forEach(e => e.classList.remove('active'));
+  document.querySelectorAll('[data-view]').forEach(e => e.classList.toggle('active', e.dataset.view === view));
+  el('view-' + view).classList.add('active');
+  if (view !== 'scan') stopScan();
+  if (view === 'add' && !el('f-id').value) resetForm();
+  if (view === 'labels') refreshLabels();
+  if (view === 'inventory') renderTable();
+}
+
+// ═══════════════════════════════
+//  UI
+// ═══════════════════════════════
+function refreshUI() {
+  const n = cars.length;
+  const totalUnits = cars.reduce((s,c) => s+(c.totalStock||1), 0);
+  const cost = cars.reduce((s,c) => s+(c.totalCost||parseFloat(c.price)||0), 0);
+  const res  = cars.reduce((s,c) => s+((parseFloat(c.resale)||0)*(c.totalStock||1)), 0);
+  const pl   = res - cost;
+  el('s-total').textContent = n + (totalUnits !== n ? ' ('+totalUnits+' units)' : '');
+  el('s-cost').textContent  = '¥' + fmt(cost);
+  el('s-resale').textContent = '¥' + fmt(res);
+  const plEl = el('s-pl');
+  plEl.textContent = (pl>=0?'+':'') + '¥' + fmt(pl);
+  plEl.className = 'val ' + (pl>=0?'val-profit':'val-loss');
+  el('sb-count').textContent = n + ' car' + (n!==1?'s':'') + ' in collection';
+  const rl = el('recent-list');
+  if (!n) {
+    rl.innerHTML = '<p style="color:var(--muted);font-size:13px;">No cars yet. <a href="#" onclick="nav(\'add\');return false;" style="color:var(--red);">Add your first!</a></p>';
+  } else {
+    rl.innerHTML = cars.slice(0,5).map(c => `
+      <div class="recent-item" onclick="showDetail('${c.id}')">
+        ${c.imageUrl ? `<img src="${h(c.imageUrl)}" class="thumb">` : `<div class="thumb-ph">🏎️</div>`}
+        <div class="recent-info">
+          <div class="recent-name">${h(c.name)}</div>
+          <div class="recent-sub">${h(seriesLabel(c))}${c.series?' · ':''}¥${fmt(c.totalCost||c.price||0)}${(c.totalStock||1)>1?` · ${c.totalStock} units`:''}</div>
+        </div>
+        ${plBadge(c)}
+      </div>`).join('');
+  }
+  renderTable();
+}
+
+function renderTable() {
+  const q = (el('q')?.value||'').toLowerCase();
+  const sort = el('sort')?.value || 'newest';
+  let list = cars.filter(c =>
+    (c.name||'').toLowerCase().includes(q) ||
+    (c.barcode||'').toLowerCase().includes(q) ||
+    (c.series||'').toLowerCase().includes(q)
+  );
+  if (sort==='name') list.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+  else if (sort==='oldest') list.sort((a,b)=>(a.createdAt||'').localeCompare(b.createdAt||''));
+  else if (sort==='price-hi') list.sort((a,b)=>(parseFloat(b.price)||0)-(parseFloat(a.price)||0));
+  else if (sort==='price-lo') list.sort((a,b)=>(parseFloat(a.price)||0)-(parseFloat(b.price)||0));
+  const tbody = el('tbl-body');
+  if (!list.length) { tbody.innerHTML=''; el('tbl-empty').style.display='block'; return; }
+  el('tbl-empty').style.display='none';
+  tbody.innerHTML = list.map(c => {
+    const tc = c.totalCost || parseFloat(c.price)||0;
+    const ts = c.totalStock || 1;
+    const totalResale = (parseFloat(c.resale)||0) * ts;
+    const pl = totalResale - tc;
+    const stockLabel = ts > 1 ? `<span class="stock-badge">×${ts}</span>` : '';
+    const seriesBadge = c.isSeriesPrice ? `<span class="series-badge">set</span>` : '';
+    return `<tr onclick="showDetail('${c.id}')">
+      <td>${c.imageUrl?`<img src="${h(c.imageUrl)}" class="thumb">`:`<div class="thumb-ph">🏎️</div>`}</td>
+      <td><div style="font-weight:600;">${h(c.name)}${stockLabel}</div>${c.series?`<div style="font-size:11px;color:var(--muted);">${h(seriesLabel(c))}</div>`:''}</td>
+      <td><span class="code-tag">${h(c.barcode||'')}</span></td>
+      <td>¥${fmt(tc)}${seriesBadge}${c.stockEntries?.length>1?`<div style="font-size:10px;color:var(--muted);">${ts} units</div>`:''}</td>
+      <td>${{mint:'✨ Mint',['near-mint']:'⭐ Near Mint',good:'👍 Good',played:'🎮 Played'}[c.condition]||'—'}</td>
+      <td>${c.resale?'¥'+fmt(c.resale)+(ts>1?`<div style="font-size:10px;color:var(--muted);">per unit</div>`:''):'—'}</td>
+      <td>${c.resale?`<span class="${pl>=0?'profit':'loss'}">${pl>=0?'+':''}¥${fmt(pl)}</span>`:'—'}</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();showDetail('${c.id}')">›</button></td>
+    </tr>`;
+  }).join('');
+}
+
+// ═══════════════════════════════
+//  ADD / EDIT FORM
+// ═══════════════════════════════
+function resetForm() {
+  el('f-id').value = '';
+  el('add-title').textContent = 'Add New Car';
+  ['f-name','f-color','f-notes','f-barcode'].forEach(id => el(id).value='');
+  el('f-resale').value = '';
+  el('f-cond').value = 'mint';
+  el('f-series').value = '';
+  el('f-series-price').checked = false;
+  onSeriesChange();
+  selectPill(document.querySelector('.pill-radio'), 'Regular');
+  el('upload-ph').style.display = 'flex';
+  el('upload-preview').style.display = 'none';
+  el('preview-img').src = '';
+  imgFile = imgDataUrl = null;
+  currentBC = null;
+  el('bc-preview-wrap').style.display = 'none';
+  stockEntries = [{qty: 1, price: ''}];
+  renderStockEntries();
+}
+
+function onSeriesChange() {
+  const val = el('f-series').value;
+  el('f-mainline-wrap').style.display = val === 'Mainline Series' ? 'block' : 'none';
+}
+function selectPill(pillEl, value) {
+  if (!pillEl) return;
+  document.querySelectorAll('.pill-radio').forEach(p => p.classList.remove('selected'));
+  pillEl.classList.add('selected');
+  const radio = pillEl.querySelector('input[type="radio"]');
+  if (radio) radio.checked = true;
+}
+
+function renderStockEntries() {
+  const wrap = el('stock-entries-wrap');
+  wrap.innerHTML = stockEntries.map((e, i) => `
+    <div class="se-row">
+      <input type="number" class="fi se-qty" min="1" placeholder="Qty" value="${e.qty}"
+        oninput="stockEntries[${i}].qty=parseInt(this.value)||1;updateStockSummary()">
+      <span class="se-x">×  ¥</span>
+      <input type="number" class="fi se-price" min="0" step="0.01" placeholder="Price per unit"
+        value="${e.price}" oninput="stockEntries[${i}].price=this.value;updateStockSummary()">
+      ${stockEntries.length > 1
+        ? `<button class="se-del" onclick="removeStockEntry(${i})" title="Remove">✕</button>`
+        : '<div style="width:28px;"></div>'}
+    </div>`).join('');
+  updateStockSummary();
+}
+function addStockEntry() {
+  stockEntries.push({qty: 1, price: ''});
+  renderStockEntries();
+}
+function removeStockEntry(i) {
+  stockEntries.splice(i, 1);
+  renderStockEntries();
+}
+function updateStockSummary() {
+  const totalUnits = stockEntries.reduce((s,e) => s+(parseInt(e.qty)||0), 0);
+  const totalCost  = stockEntries.reduce((s,e) => s+((parseInt(e.qty)||0)*(parseFloat(e.price)||0)), 0);
+  const isSet = el('f-series-price')?.checked;
+  const sumEl = el('stock-summary');
+  if (totalCost > 0 || totalUnits > 1) {
+    sumEl.style.display = 'flex';
+    sumEl.innerHTML = `<span>Units: <b>${totalUnits}</b></span>`
+      + `<span>Total cost: <b>¥${fmt(totalCost)}</b></span>`
+      + (totalUnits > 0 && !isSet ? `<span>Avg per unit: <b>¥${fmt(totalCost/totalUnits)}</b></span>` : '')
+      + (isSet ? `<span style="color:var(--gold);">💰 Full series price</span>` : '');
+  } else {
+    sumEl.style.display = 'none';
+  }
+}
+function getStockTotals() {
+  const entries = stockEntries.map(e => ({qty: parseInt(e.qty)||1, price: parseFloat(e.price)||0}));
+  const totalStock = entries.reduce((s,e) => s+e.qty, 0);
+  const totalCost  = entries.reduce((s,e) => s+(e.qty*e.price), 0);
+  const avgPrice   = totalStock > 0 ? totalCost / totalStock : 0;
+  return {entries, totalStock, totalCost, avgPrice};
+}
+
+function previewBarcode(val) {
+  currentBC = val.trim();
+  const wrap = el('bc-preview-wrap');
+  if (!currentBC) { wrap.style.display='none'; return; }
+  try {
+    JsBarcode('#bc-svg', currentBC, {format:'CODE128',width:2,height:52,displayValue:true,fontSize:12,margin:8});
+    el('bc-val').textContent = currentBC;
+    wrap.style.display = 'block';
+  } catch(e) { wrap.style.display='none'; }
+}
+
+function onImgSelect(evt) {
+  const file = evt.target.files[0];
+  if (!file) return;
+  imgFile = file;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    imgDataUrl = await compressImage(e.target.result);
+    el('preview-img').src = imgDataUrl;
+    el('upload-ph').style.display = 'none';
+    el('upload-preview').style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearImg(evt) {
+  evt.stopPropagation();
+  imgFile = imgDataUrl = null;
+  el('preview-img').src = '';
+  el('upload-ph').style.display = 'flex';
+  el('upload-preview').style.display = 'none';
+  el('file-in').value = '';
+}
+
+async function saveCar() {
+  const name = el('f-name').value.trim();
+  if (!name) { toast('⚠️ Car name is required'); return; }
+  const {entries, totalStock, totalCost, avgPrice} = getStockTotals();
+  if (!totalCost) { toast('⚠️ Enter at least one purchase price'); return; }
+  loading(true);
+  try {
+    const editId = el('f-id').value;
+    let imageUrl = editId ? (cars.find(c=>c.id===editId)?.imageUrl||null) : null;
+    if (imgDataUrl) imageUrl = imgDataUrl;
+
+    const data = {
+      name,
+      stockEntries: entries,
+      totalStock,
+      totalCost,
+      price: avgPrice,                    // avg per unit — kept for sort compat
+      isSeriesPrice: el('f-series-price').checked,
+      series: el('f-series').value,
+      mainlineType: el('f-series').value === 'Mainline Series' ? (document.querySelector('input[name="mainline-type"]:checked')?.value||'Regular') : '',
+      resale: parseFloat(el('f-resale').value)||0,
+      color:  el('f-color').value.trim(),
+      condition: el('f-cond').value,
+      notes:  el('f-notes').value.trim(),
+      barcode: el('f-barcode').value.trim(),
+      imageUrl
+    };
+
+    if (editId) { dbUpdate(editId, data); toast('✅ Car updated!'); }
+    else        { dbAdd(data);            toast('✅ Car added!'); }
+
+    refreshUI();
+    nav('inventory');
+  } catch(e) {
+    toast('❌ ' + e.message);
+  } finally {
+    loading(false);
+  }
+}
+
+// ═══════════════════════════════
+//  DETAIL MODAL
+// ═══════════════════════════════
+function showDetail(id) {
+  const c = cars.find(x=>x.id===id);
+  if (!c) return;
+  detailId = id;
+  const condMap = {mint:'✨ Mint (Sealed)','near-mint':'⭐ Near Mint',good:'👍 Good',played:'🎮 Played'};
+  el('m-name').textContent = c.name;
+  if (c.imageUrl) { el('m-img').src=c.imageUrl; el('m-img').style.display='block'; el('m-img-ph').style.display='none'; }
+  else            { el('m-img').style.display='none'; el('m-img-ph').style.display='flex'; }
+  const tc = c.totalCost || (parseFloat(c.price)||0);
+  const ts = c.totalStock || 1;
+  const totalResale = (parseFloat(c.resale)||0) * ts;
+  const pl = totalResale - tc;
+  el('m-price').textContent  = '¥'+fmt(tc) + (c.isSeriesPrice?' (series)':'');
+  el('m-resale').textContent = c.resale?'¥'+fmt(c.resale):'—';
+  el('m-stock').textContent  = ts + ' unit' + (ts!==1?'s':'') + (c.stockEntries?.length>1?' (multiple prices)':'');
+  const plEl = el('m-pl');
+  plEl.textContent = c.resale?(pl>=0?'+':'')+'¥'+fmt(pl):'—';
+  plEl.className = 'di-val '+(c.resale?(pl>=0?'profit':'loss'):'');
+  el('m-cond').textContent   = condMap[c.condition]||c.condition||'—';
+  el('m-color').textContent  = c.color||'—';
+  el('m-series').textContent = seriesLabel(c)||'—';
+  // Stock breakdown
+  if (c.stockEntries?.length > 1) {
+    el('m-stock-entries-wrap').style.display = 'block';
+    el('m-stock-entries').innerHTML = c.stockEntries.map((e,i) =>
+      `<div style="padding:3px 0;">Entry ${i+1}: ${e.qty} unit${e.qty!==1?'s':''} × ¥${fmt(e.price)} = ¥${fmt(e.qty*e.price)}</div>`
+    ).join('') + `<div style="border-top:1px solid var(--border);margin-top:6px;padding-top:6px;font-weight:600;color:var(--text);">Total: ${ts} units · ¥${fmt(tc)}</div>`;
+  } else {
+    el('m-stock-entries-wrap').style.display = 'none';
+  }
+  if (c.barcode) {
+    try { JsBarcode('#m-bc-svg', c.barcode, {format:'CODE128',width:1.5,height:40,displayValue:true,fontSize:10,margin:6}); } catch(e) {}
+    el('m-bc-val').textContent = c.barcode;
+  }
+  if (c.notes) { el('m-notes').textContent=c.notes; el('m-notes-wrap').style.display='block'; }
+  else el('m-notes-wrap').style.display='none';
+  el('m-edit-btn').onclick = () => { closeModal(); editCar(id); };
+  el('m-del-btn').onclick  = () => deleteCar(id);
+  el('modal-detail').classList.add('open');
+}
+
+function closeModal() { el('modal-detail').classList.remove('open'); }
+
+function editCar(id) {
+  const c = cars.find(x=>x.id===id);
+  if (!c) return;
+  el('f-id').value     = id;
+  el('add-title').textContent = 'Edit Car';
+  el('f-name').value   = c.name||'';
+  el('f-series').value = c.series||'';
+  onSeriesChange();
+  if (c.mainlineType) {
+    const radio = document.querySelector(`input[name="mainline-type"][value="${c.mainlineType}"]`);
+    if (radio) { radio.checked = true; selectPill(radio.closest('.pill-radio'), c.mainlineType); }
+  }
+  stockEntries = c.stockEntries?.length ? c.stockEntries.map(e=>({qty:e.qty,price:e.price})) : [{qty: c.totalStock||1, price: c.price||''}];
+  el('f-series-price').checked = c.isSeriesPrice || false;
+  renderStockEntries();
+  el('f-resale').value = c.resale||'';
+  el('f-color').value  = c.color||'';
+  el('f-cond').value   = c.condition||'mint';
+  el('f-notes').value  = c.notes||'';
+  imgFile = imgDataUrl = null;
+  if (c.imageUrl) {
+    el('preview-img').src = c.imageUrl;
+    el('upload-ph').style.display='none';
+    el('upload-preview').style.display='block';
+  } else {
+    el('upload-ph').style.display='flex';
+    el('upload-preview').style.display='none';
+  }
+  currentBC = c.barcode||'';
+  el('f-barcode').value = currentBC;
+  previewBarcode(currentBC);
+  nav('add');
+}
+
+async function deleteCar(id) {
+  if (!confirm('Remove this car from inventory?')) return;
+  closeModal();
+  dbDelete(id);
+  refreshUI();
+  toast('🗑️ Deleted');
+}
+
+// ═══════════════════════════════
+//  PRICE LOOKUP
+// ═══════════════════════════════
+function openXianyuModal() { el('xy-input').value=''; el('modal-xianyu').classList.add('open'); setTimeout(()=>el('xy-input').focus(),100); }
+function closeXianyuModal() { el('modal-xianyu').classList.remove('open'); }
+function doXianyuSearch() {
+  const name = el('xy-input').value.trim();
+  if (!name) { toast('⚠️ Enter a car name first'); return; }
+  const searchTerm = 'Hot Wheels ' + name;
+  const q = encodeURIComponent(searchTerm);
+  // Copy to clipboard so user can paste into Xianyu's search box
+  navigator.clipboard.writeText(searchTerm).catch(()=>{});
+  window.open('https://www.goofish.com/search?keyword=' + q, '_blank');
+  closeXianyuModal();
+  toast('📋 "' + searchTerm + '" copied — paste in Xianyu search if needed');
+}
+
+// ═══════════════════════════════
+//  BARCODE SCANNER
+// ═══════════════════════════════
+async function startScan() {
+  el('reader').style.display='block';
+  el('btn-scan-start').style.display='none';
+  el('btn-scan-stop').style.display='block';
+  el('scan-result').style.display='none';
+  scanner = new Html5Qrcode('reader');
+  try {
+    await scanner.start({facingMode:'environment'},{fps:10,qrbox:{width:280,height:130}},onScanOK,null);
+  } catch(e) { toast('❌ Camera: '+e); stopScan(); }
+}
+function stopScan() {
+  if (scanner) { scanner.stop().catch(()=>{}); scanner=null; }
+  el('reader').style.display='none';
+  el('btn-scan-start').style.display='block';
+  el('btn-scan-stop').style.display='none';
+}
+function onScanOK(code) {
+  stopScan();
+  const c = cars.find(x=>x.barcode===code);
+  if (c) { showDetail(c.id); }
+  else   { resetForm(); nav('add'); el('f-barcode').value=code; previewBarcode(code); toast('📷 Barcode scanned — fill in the details!'); }
+}
+
+// ═══════════════════════════════
+//  LABELS
+// ═══════════════════════════════
+function refreshLabels() {
+  el('lbl-sel').innerHTML = cars.map(c => `
+    <label class="lbl-check">
+      <input type="checkbox" ${selLabels.has(c.id)?'checked':''} onchange="toggleLabel('${c.id}',this.checked)" style="accent-color:var(--red);">
+      ${h(c.name)}
+    </label>`).join('');
+  drawLabels();
+}
+function drawLabels() {
+  const toShow = selLabels.size ? cars.filter(c=>selLabels.has(c.id)) : cars;
+  el('lbl-print').innerHTML = toShow.map(c => {
+    let bcSvg='';
+    try {
+      const tmp=document.createElementNS('http://www.w3.org/2000/svg','svg');
+      tmp.id='bc-tmp-'+c.id; document.body.appendChild(tmp);
+      JsBarcode('#bc-tmp-'+c.id, c.barcode||'HW000',{format:'CODE128',width:1.5,height:32,displayValue:true,fontSize:9,margin:3});
+      bcSvg=tmp.outerHTML; document.body.removeChild(tmp);
+    } catch(e){}
+    return `<div class="label-card">
+      <div class="label-car-name">${h(c.name)}</div>
+      ${c.imageUrl?`<img src="${h(c.imageUrl)}" class="label-car-img">`:''}
+      ${bcSvg}
+      <div class="label-price">购入: ¥${fmt(c.price||0)}${c.resale?' · 估值: ¥'+fmt(c.resale):''}</div>
+    </div>`;
+  }).join('');
+}
+function toggleLabel(id,on) { on?selLabels.add(id):selLabels.delete(id); drawLabels(); }
+function selAll()   { cars.forEach(c=>selLabels.add(c.id)); refreshLabels(); }
+function deselAll() { selLabels.clear(); refreshLabels(); }
+
+// ═══════════════════════════════
+//  CAMERA MODAL
+// ═══════════════════════════════
+let camStream = null;
+async function openCameraModal() {
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'},audio:false});
+    el('cam-video').srcObject = camStream;
+    el('modal-camera').classList.add('open');
+  } catch(e) { toast('❌ Camera not available: '+e.message); }
+}
+function capturePhoto() {
+  const video=el('cam-video'), canvas=el('cam-canvas');
+  const MAX=400; let w=video.videoWidth, h=video.videoHeight;
+  if(w>MAX){h=Math.round(h*MAX/w);w=MAX;}
+  canvas.width=w; canvas.height=h;
+  canvas.getContext('2d').drawImage(video,0,0,w,h);
+  imgDataUrl = canvas.toDataURL('image/jpeg',0.8);
+  el('preview-img').src = imgDataUrl;
+  el('upload-ph').style.display='none';
+  el('upload-preview').style.display='block';
+  closeCameraModal();
+}
+function closeCameraModal() {
+  if(camStream){camStream.getTracks().forEach(t=>t.stop());camStream=null;}
+  el('cam-video').srcObject=null;
+  el('modal-camera').classList.remove('open');
+}
+
+// ═══════════════════════════════
+//  UTILS
+// ═══════════════════════════════
+function seriesLabel(c) {
+  if (!c.series) return '';
+  if (c.series === 'Mainline Series' && c.mainlineType && c.mainlineType !== 'Regular') return c.series + ' · ' + c.mainlineType;
+  return c.series;
+}
+function el(id) { return document.getElementById(id); }
+function h(s)   { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function fmt(n) { return parseFloat(n||0).toLocaleString('zh-CN',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+function plBadge(c) {
+  if(!c.resale) return '';
+  const pl=(parseFloat(c.resale)||0)-(parseFloat(c.price)||0);
+  const pct=c.price>0?(pl/c.price*100).toFixed(1):0;
+  return `<span class="badge ${pl>=0?'badge-up':'badge-dn'}">${pl>=0?'▲':'▼'} ${Math.abs(pct)}%</span>`;
+}
+let toastTimer;
+function toast(msg) {
+  const t=el('toast'); t.textContent=msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'),3200);
+}
+function loading(on) { el('loading').classList.toggle('show',on); }
+el('modal-detail').addEventListener('click',e=>{if(e.target===el('modal-detail'))closeModal();});
+el('modal-camera').addEventListener('click',e=>{if(e.target===el('modal-camera'))closeCameraModal();});
+el('modal-xianyu').addEventListener('click',e=>{if(e.target===el('modal-xianyu'))closeXianyuModal();});
+el('modal-sync').addEventListener('click',e=>{if(e.target===el('modal-sync'))closeSyncModal();});
+</script>
+</body>
+</html>
