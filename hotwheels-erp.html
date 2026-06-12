@@ -625,7 +625,7 @@ function mergeCars(remote, local) {
 async function fetchFromGist() {
   // Cache-bust so GitHub doesn't return stale data
   const res = await fetch('https://api.github.com/gists/'+ghGistId+'?_='+Date.now(), {
-    headers: {...ghHeaders(), 'Cache-Control': 'no-cache'}
+    headers: ghHeaders()
   });
   if (!res.ok) throw new Error('Fetch failed: '+res.status);
   const data = await res.json();
