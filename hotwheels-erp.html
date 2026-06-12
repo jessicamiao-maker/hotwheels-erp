@@ -566,7 +566,19 @@ window.addEventListener('load', async () => {
     catch(e) { setSyncDot('err'); toast('⚠️ Cloud sync failed — using local data'); }
   }
   syncReady = true;
+  startAutoSync();
 });
+
+function startAutoSync() {
+  setInterval(async () => {
+    if (!ghToken || !ghGistId) return;
+    try {
+      const prevCount = cars.length;
+      await fetchFromGist();
+      if (cars.length !== prevCount) setSyncDot('ok'); // subtle indicator if data changed
+    } catch(e) { /* silent fail — don't toast on background sync */ }
+  }, 30000); // poll every 30 seconds
+}
 
 // ═══════════════════════════════
 //  DATA
