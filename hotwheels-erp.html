@@ -578,6 +578,7 @@ let scanner = null;
 let selLabels = new Set();
 let stockEntries = [{qty: 1, price: ''}];
 let subCarEntries = [];
+let _editingCar = false;
 
 // ═══════════════════════════════
 //  BOOT
@@ -846,7 +847,7 @@ function nav(view) {
   document.querySelectorAll('[data-view]').forEach(e => e.classList.toggle('active', e.dataset.view === view));
   el('view-' + view).classList.add('active');
   if (view !== 'scan') stopScan();
-  if (view === 'add' && !el('f-id').value) resetForm();
+  if (view === 'add' && !_editingCar) resetForm();
   if (view === 'labels') refreshLabels();
   if (view === 'inventory') renderTable();
 }
@@ -927,6 +928,7 @@ function renderTable() {
 //  ADD / EDIT FORM
 // ═══════════════════════════════
 function resetForm() {
+  _editingCar = false;
   el('f-id').value = '';
   el('add-title').textContent = 'Add New Car';
   ['f-name','f-color','f-notes','f-barcode'].forEach(id => el(id).value='');
@@ -1202,6 +1204,7 @@ function closeModal() { el('modal-detail').classList.remove('open'); }
 function editCar(id) {
   const c = cars.find(x=>x.id===id);
   if (!c) return;
+  _editingCar = true;
   el('f-id').value     = id;
   el('add-title').textContent = 'Edit Car';
   el('f-name').value   = c.name||'';
