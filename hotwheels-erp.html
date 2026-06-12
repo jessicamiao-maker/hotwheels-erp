@@ -543,6 +543,7 @@ const GH_FILE     = 'hotwheels-erp.json';
 let cars = [];
 let ghToken = '';
 let ghGistId = '';
+let syncReady = false; // blocks saves until initial Gist fetch completes
 let imgFile = null, imgDataUrl = null;
 let currentBC = null;
 let detailId = null;
@@ -564,6 +565,7 @@ window.addEventListener('load', async () => {
     try { await fetchFromGist(); setSyncDot('ok'); }
     catch(e) { setSyncDot('err'); toast('⚠️ Cloud sync failed — using local data'); }
   }
+  syncReady = true;
 });
 
 // ═══════════════════════════════
@@ -601,15 +603,27 @@ function setSyncDot(state) {
 function ghHeaders() {
   return {'Authorization':'Bearer '+ghToken,'Accept':'application/vnd.github+json','Content-Type':'application/json'};
 }
+function mergeCars(remote, local) {
+  // Combine both arrays, deduplicate by ID — remote wins on conflict
+  const map = new Map();
+  local.forEach(c => map.set(c.id, c));
+  remote.forEach(c => map.set(c.id, c)); // remote overwrites local for same ID
+  return [...map.values()].sort((a,b) => new Date(b.createdAt||0) - new Date(a.createdAt||0));
+}
 async function fetchFromGist() {
-  const res = await fetch('https://api.github.com/gists/'+ghGistId, {headers: ghHeaders()});
+  // Cache-bust so GitHub doesn't return stale data
+  const res = await fetch('https://api.github.com/gists/'+ghGistId+'?_='+Date.now(), {
+    headers: {...ghHeaders(), 'Cache-Control': 'no-cache'}
+  });
   if (!res.ok) throw new Error('Fetch failed: '+res.status);
   const data = await res.json();
   const content = data.files?.[GH_FILE]?.content;
   if (content) {
     const parsed = JSON.parse(content);
     if (Array.isArray(parsed.cars) && parsed.cars.length > 0) {
-      cars = parsed.cars; save(); refreshUI();
+      // Merge remote + local so neither side loses data
+      cars = mergeCars(parsed.cars, cars);
+      save(); refreshUI();
     } else if (cars.length > 0) {
       // Remote is empty but we have local data — push local up
       await syncToGist();
@@ -981,6 +995,7 @@ function clearImg(evt) {
 }
 
 async function saveCar() {
+  if (!syncReady) { toast('⏳ Syncing data — please wait a moment and try again'); return; }
   const name = el('f-name').value.trim();
   if (!name) { toast('⚠️ Car name is required'); return; }
   const {entries, totalStock, totalCost, avgPrice} = getStockTotals();
