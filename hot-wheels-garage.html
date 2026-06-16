@@ -1,0 +1,1068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Hot Wheels Garage</title>
+<meta name="description" content="Personal Hot Wheels inventory tracker with AI visual search">
+<script src="https://unpkg.com/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+<style>
+  :root {
+    --red: #E24B4A; --red-dark: #A32D2D; --red-light: #FCEBEB;
+    --green: #3B6D11; --green-bg: #EAF3DE;
+    --amber: #854F0B; --amber-bg: #FAEEDA;
+    --blue: #185FA5; --blue-bg: #E6F1FB;
+    --bg: #f7f6f3; --surface: #ffffff; --surface2: #f1efe8;
+    --border: rgba(0,0,0,0.12); --border-strong: rgba(0,0,0,0.22);
+    --text: #1a1a18; --text2: #5f5e5a; --text3: #888780;
+    --radius: 10px; --radius-lg: 14px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1a1a18; --surface: #242422; --surface2: #2e2e2b;
+      --border: rgba(255,255,255,0.1); --border-strong: rgba(255,255,255,0.2);
+      --text: #f1efe8; --text2: #b4b2a9; --text3: #888780;
+      --red-light: #3a1010; --green-bg: #1a2e0a; --amber-bg: #2e1e05; --blue-bg: #081e38;
+      --green: #97c459; --amber: #ef9f27; --blue: #85b7eb;
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 15px; }
+
+  /* ── Layout ── */
+  .app { display: flex; flex-direction: column; min-height: 100vh; }
+  .topbar { background: var(--surface); border-bottom: 0.5px solid var(--border); padding: 0 1.25rem; height: 56px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 50; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-dot { width: 10px; height: 10px; background: var(--red); border-radius: 50%; flex-shrink: 0; }
+  .brand-name { font-size: 17px; font-weight: 600; letter-spacing: -0.3px; }
+  .brand-sub { font-size: 11px; color: var(--text3); }
+  .topbar-actions { display: flex; gap: 8px; }
+
+  .main { flex: 1; padding: 1.25rem; max-width: 960px; margin: 0 auto; width: 100%; }
+
+  /* ── Buttons ── */
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 14px; border-radius: var(--radius); border: 0.5px solid var(--border-strong); background: transparent; color: var(--text); font-size: 13px; font-weight: 500; cursor: pointer; transition: background .12s; white-space: nowrap; }
+  .btn:hover { background: var(--surface2); }
+  .btn-red { background: var(--red); color: #fff; border-color: var(--red); }
+  .btn-red:hover { background: var(--red-dark); border-color: var(--red-dark); }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn-icon { padding: 7px; }
+
+  /* ── Stats ── */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin-bottom: 1.25rem; }
+  .stat { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .stat-label { font-size: 11px; color: var(--text3); margin-bottom: 5px; text-transform: uppercase; letter-spacing: 0.3px; }
+  .stat-val { font-size: 22px; font-weight: 600; }
+  .stat-sub { font-size: 11px; color: var(--text3); margin-top: 2px; }
+
+  /* ── Search & filters ── */
+  .toolbar { display: flex; gap: 8px; margin-bottom: 1rem; flex-wrap: wrap; }
+  .toolbar input, .toolbar select { padding: 8px 11px; border: 0.5px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); font-size: 13px; }
+  .toolbar input { flex: 1; min-width: 160px; }
+  .toolbar select { min-width: 130px; }
+
+  /* ── Grid ── */
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 12px; }
+  .card { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+  .card:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
+  .card-img { width: 100%; height: 100px; background: var(--surface2); display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  .card-img img { width: 100%; height: 100%; object-fit: cover; }
+  .card-img-ph { color: var(--text3); font-size: 32px; }
+  .card-body { padding: 10px 12px; }
+  .card-code { font-family: monospace; font-size: 10px; color: var(--text3); background: var(--surface2); padding: 2px 6px; border-radius: 4px; display: inline-block; margin-bottom: 5px; }
+  .card-name { font-size: 13px; font-weight: 600; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-series { font-size: 11px; color: var(--text2); margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-footer { display: flex; justify-content: space-between; align-items: center; }
+  .card-price { font-size: 13px; color: var(--red); font-weight: 600; }
+  .card-gain { font-size: 11px; font-weight: 600; }
+  .gain-pos { color: var(--green); }
+  .gain-neg { color: var(--red-dark); }
+  .empty { text-align: center; padding: 3rem 1rem; color: var(--text3); grid-column: 1/-1; }
+  .empty-icon { font-size: 40px; margin-bottom: 12px; }
+
+  /* ── Tags ── */
+  .tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 5px; }
+  .tag-mint { background: var(--green-bg); color: var(--green); }
+  .tag-used { background: var(--amber-bg); color: var(--amber); }
+  .tag-damaged { background: var(--red-light); color: var(--red-dark); }
+
+  /* ── Modal ── */
+  .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 200; padding: 1rem; }
+  .modal { background: var(--surface); border-radius: var(--radius-lg); border: 0.5px solid var(--border-strong); width: 500px; max-width: 100%; max-height: 92vh; overflow-y: auto; }
+  .modal-header { padding: 1.25rem 1.25rem 0; display: flex; align-items: center; justify-content: space-between; margin-bottom: 1rem; }
+  .modal-title { font-size: 16px; font-weight: 600; }
+  .modal-body { padding: 0 1.25rem 1.25rem; }
+  .close-btn { background: none; border: none; cursor: pointer; color: var(--text2); font-size: 20px; line-height: 1; padding: 2px; }
+  .close-btn:hover { color: var(--text); }
+
+  /* ── Form ── */
+  .form-row { margin-bottom: 14px; }
+  .form-row label { display: block; font-size: 12px; color: var(--text2); font-weight: 500; margin-bottom: 5px; }
+  .form-row input, .form-row select, .form-row textarea { width: 100%; padding: 9px 11px; border: 0.5px solid var(--border-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); font-size: 14px; font-family: inherit; }
+  .form-row textarea { resize: vertical; min-height: 70px; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .img-upload-area { border: 1.5px dashed var(--border-strong); border-radius: var(--radius); padding: 1.25rem; text-align: center; cursor: pointer; color: var(--text2); font-size: 13px; position: relative; transition: background .12s; }
+  .img-upload-area:hover { background: var(--surface2); }
+  .img-upload-area input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+  .img-preview-thumb { width: 100%; height: 130px; object-fit: cover; border-radius: var(--radius); margin-bottom: 8px; display: block; }
+  .form-actions { display: flex; gap: 8px; justify-content: flex-end; padding-top: 1rem; border-top: 0.5px solid var(--border); margin-top: 1rem; }
+
+  /* ── Detail modal ── */
+  .detail-img { width: 100%; height: 200px; object-fit: cover; border-radius: var(--radius); margin-bottom: 1rem; display: block; }
+  .detail-img-ph { width: 100%; height: 200px; background: var(--surface2); border-radius: var(--radius); display: flex; align-items: center; justify-content: center; font-size: 56px; margin-bottom: 1rem; }
+  .detail-rows { border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-bottom: 1rem; }
+  .detail-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; font-size: 14px; }
+  .detail-row + .detail-row { border-top: 0.5px solid var(--border); }
+  .detail-label { color: var(--text2); }
+  .detail-val { font-weight: 600; text-align: right; }
+  .barcode-box { background: var(--surface2); border-radius: var(--radius); padding: 14px; text-align: center; margin-bottom: 1rem; }
+  .barcode-box svg { max-width: 100%; height: auto; }
+  .barcode-num { font-family: monospace; font-size: 12px; color: var(--text2); margin-top: 4px; }
+  .resale-box { background: var(--surface2); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 1rem; }
+  .resale-title { font-size: 12px; color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; margin-bottom: 10px; }
+  .resale-row { display: flex; justify-content: space-between; align-items: center; font-size: 14px; margin-bottom: 6px; }
+  .resale-row:last-child { margin-bottom: 0; }
+
+  /* ── Scanner modal ── */
+  .scanner-wrap { position: relative; width: 100%; border-radius: var(--radius); overflow: hidden; background: #000; }
+  #scanner-video { width: 100%; display: block; max-height: 280px; object-fit: cover; }
+  .scanner-overlay { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; pointer-events: none; }
+  .scanner-frame { width: 200px; height: 80px; border: 2px solid var(--red); border-radius: 8px; }
+  .scanner-status { margin-top: 10px; text-align: center; font-size: 13px; color: var(--text2); min-height: 20px; }
+  .scanner-found { color: var(--green); font-weight: 600; }
+
+  /* ── AI Visual Search ── */
+  .vis-search-wrap { position: relative; width: 100%; border-radius: var(--radius); overflow: hidden; background: #000; min-height: 220px; display: flex; align-items: center; justify-content: center; }
+  #vis-video { width: 100%; display: block; max-height: 300px; object-fit: cover; }
+  #vis-canvas { display: none; }
+  .vis-capture-btn { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); background: #fff; border: 3px solid var(--red); border-radius: 50%; width: 54px; height: 54px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; box-shadow: 0 2px 8px rgba(0,0,0,0.3); transition: transform .1s; }
+  .vis-capture-btn:hover { transform: translateX(-50%) scale(1.07); }
+  .vis-capture-btn:active { transform: translateX(-50%) scale(0.95); }
+  .vis-status { margin-top: 10px; text-align: center; font-size: 13px; color: var(--text2); min-height: 20px; padding: 0 4px; }
+  .vis-result { border: 0.5px solid var(--border); border-radius: var(--radius); overflow: hidden; margin-top: 12px; }
+  .vis-result-header { padding: 10px 14px; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .3px; color: var(--text3); background: var(--surface2); border-bottom: 0.5px solid var(--border); }
+  .vis-match { display: flex; align-items: center; gap: 12px; padding: 12px 14px; cursor: pointer; transition: background .12s; border-bottom: 0.5px solid var(--border); }
+  .vis-match:last-child { border-bottom: none; }
+  .vis-match:hover { background: var(--surface2); }
+  .vis-match-img { width: 52px; height: 38px; border-radius: 6px; object-fit: cover; background: var(--surface2); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+  .vis-match-info { flex: 1; }
+  .vis-match-name { font-size: 13px; font-weight: 600; }
+  .vis-match-meta { font-size: 11px; color: var(--text2); margin-top: 2px; }
+  .vis-match-score { font-size: 12px; font-weight: 700; padding: 3px 8px; border-radius: 5px; flex-shrink: 0; }
+  .vis-score-high { background: var(--green-bg); color: var(--green); }
+  .vis-score-med { background: var(--amber-bg); color: var(--amber); }
+  .vis-identified { background: var(--blue-bg); border-radius: var(--radius); padding: 12px 14px; margin-top: 12px; font-size: 13px; }
+  .vis-identified-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .3px; color: var(--blue); margin-bottom: 6px; }
+  .vis-identified-name { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 2px; }
+  .vis-identified-sub { font-size: 12px; color: var(--text2); }
+  .vis-no-match { text-align: center; padding: 1rem; color: var(--text2); font-size: 13px; }
+  .vis-tabs { display: flex; border-bottom: 0.5px solid var(--border); margin-bottom: 14px; }
+  .vis-tab { flex: 1; padding: 9px; font-size: 13px; font-weight: 500; border: none; background: none; color: var(--text2); cursor: pointer; border-bottom: 2px solid transparent; transition: color .12s; }
+  .vis-tab.active { color: var(--red); border-bottom-color: var(--red); }
+  .vis-upload-area { border: 1.5px dashed var(--border-strong); border-radius: var(--radius); padding: 2rem 1rem; text-align: center; cursor: pointer; color: var(--text2); font-size: 13px; position: relative; transition: background .12s; }
+  .vis-upload-area:hover { background: var(--surface2); }
+  .vis-upload-area input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+  .vis-preview-img { width: 100%; max-height: 200px; object-fit: contain; border-radius: var(--radius); margin-bottom: 10px; display: block; background: var(--surface2); }
+  .apikey-row { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; background: var(--surface2); border-radius: var(--radius); padding: 10px 12px; }
+  .apikey-row input { flex: 1; padding: 7px 10px; border: 0.5px solid var(--border-strong); border-radius: 7px; background: var(--surface); color: var(--text); font-size: 12px; font-family: monospace; }
+  .apikey-row label { font-size: 11px; color: var(--text3); white-space: nowrap; }
+  .apikey-hint { font-size: 11px; color: var(--text3); margin-top: 4px; }
+
+  /* ── Print ── */
+  @media print {
+    body * { visibility: hidden !important; }
+    #print-area, #print-area * { visibility: visible !important; }
+    #print-area { position: fixed; inset: 0; background: white; padding: 20px; display: flex !important; flex-wrap: wrap; gap: 14px; align-content: flex-start; }
+    .print-label { width: 180px; border: 1px solid #ccc; border-radius: 6px; padding: 10px; page-break-inside: avoid; background: white; }
+    .print-label .pl-name { font-size: 10px; font-weight: 700; margin-bottom: 4px; color: #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .print-label .pl-series { font-size: 9px; color: #555; margin-bottom: 6px; }
+    .print-label svg { width: 100%; height: auto; display: block; }
+    .print-label .pl-code { font-family: monospace; font-size: 9px; color: #555; text-align: center; margin-top: 3px; }
+  }
+  #print-area { display: none; }
+
+  /* ── Nav tabs ── */
+  .tabs { display: flex; gap: 4px; margin-bottom: 1.25rem; background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 4px; }
+  .tab { flex: 1; padding: 7px 10px; border-radius: 7px; border: none; background: transparent; color: var(--text2); font-size: 13px; font-weight: 500; cursor: pointer; transition: background .12s, color .12s; text-align: center; }
+  .tab.active { background: var(--red); color: #fff; }
+  .tab:not(.active):hover { background: var(--surface2); color: var(--text); }
+
+  /* ── Value chart ── */
+  .chart-wrap { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 1rem; margin-bottom: 1rem; }
+  .chart-title { font-size: 13px; color: var(--text2); margin-bottom: 1rem; font-weight: 600; }
+  .bar-chart { display: flex; align-items: flex-end; gap: 6px; height: 120px; }
+  .bar-col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
+  .bar { width: 100%; background: var(--red); border-radius: 4px 4px 0 0; transition: height .3s; min-height: 3px; opacity: 0.85; }
+  .bar-label { font-size: 10px; color: var(--text3); text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .bar-val { font-size: 10px; color: var(--text2); font-weight: 600; }
+
+  /* ── Responsive ── */
+  @media (max-width: 600px) {
+    .main { padding: 1rem; }
+    .stats { grid-template-columns: 1fr 1fr; }
+    .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
+    .form-grid { grid-template-columns: 1fr; }
+    .topbar-actions .btn span { display: none; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-dot"></div>
+      <div>
+        <div class="brand-name">Hot Wheels Garage</div>
+        <div class="brand-sub">Personal inventory</div>
+      </div>
+    </div>
+    <div class="topbar-actions">
+      <button class="btn btn-sm" onclick="openVisSearch()" title="AI visual car lookup" style="background:var(--blue-bg);border-color:var(--blue);color:var(--blue)">🔍 <span>Find car</span></button>
+      <button class="btn btn-sm" onclick="openScanner()" title="Scan barcode">📷 <span>Scan</span></button>
+      <button class="btn btn-sm" onclick="openPrintView()" title="Print labels">🖨️ <span>Print</span></button>
+      <button class="btn btn-sm" onclick="exportCSV()">⬇️ <span>Export</span></button>
+      <button class="btn btn-red btn-sm" onclick="openAdd()">+ <span>Add car</span></button>
+    </div>
+  </div>
+
+  <div class="main">
+    <!-- Stats -->
+    <div class="stats" id="stats-bar"></div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('inventory',this)">Collection</button>
+      <button class="tab" onclick="switchTab('value',this)">Value tracker</button>
+    </div>
+
+    <!-- Inventory tab -->
+    <div id="tab-inventory">
+      <div class="toolbar">
+        <input type="text" id="search" placeholder="Search name, code, series…" oninput="renderGrid()">
+        <select id="filter-cond" onchange="renderGrid()">
+          <option value="">All conditions</option>
+          <option>Mint</option><option>Used</option><option>Damaged</option>
+        </select>
+        <select id="sort" onchange="renderGrid()">
+          <option value="date-desc">Newest first</option>
+          <option value="date-asc">Oldest first</option>
+          <option value="price-desc">Highest price</option>
+          <option value="price-asc">Lowest price</option>
+          <option value="gain-desc">Best ROI</option>
+          <option value="name-asc">Name A–Z</option>
+        </select>
+      </div>
+      <div class="grid" id="grid"></div>
+    </div>
+
+    <!-- Value tab -->
+    <div id="tab-value" style="display:none">
+      <div class="stats" id="value-stats" style="margin-bottom:1.25rem"></div>
+      <div class="chart-wrap">
+        <div class="chart-title">Top 8 cars by estimated resale value</div>
+        <div class="bar-chart" id="value-chart"></div>
+      </div>
+      <div id="value-table"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── AI Visual Search Modal ── -->
+<div id="modal-vis" style="display:none">
+  <div class="modal-bg" onclick="if(event.target===this)closeVisSearch()">
+    <div class="modal" style="width:520px">
+      <div class="modal-header">
+        <div class="modal-title">🔍 Find car by photo</div>
+        <button class="close-btn" onclick="closeVisSearch()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Take or upload a photo of any Hot Wheels car — in store, at a swap meet, anywhere. AI will identify it and check your collection instantly.</p>
+
+        <div class="apikey-row">
+          <label>Anthropic API key</label>
+          <input type="password" id="vis-apikey" placeholder="sk-ant-…" oninput="saveApiKey(this.value)">
+        </div>
+        <div class="apikey-hint" style="margin-bottom:14px">Your key is saved locally and never leaves your device. Get one free at <a href="https://console.anthropic.com" target="_blank" style="color:var(--blue)">console.anthropic.com</a></div>
+
+        <div class="vis-tabs">
+          <button class="vis-tab active" onclick="switchVisTab('camera',this)">📷 Camera</button>
+          <button class="vis-tab" onclick="switchVisTab('upload',this)">🖼 Upload photo</button>
+        </div>
+
+        <!-- Camera tab -->
+        <div id="vis-tab-camera">
+          <div class="vis-search-wrap" id="vis-camera-wrap">
+            <video id="vis-video" autoplay muted playsinline></video>
+            <div id="vis-camera-ph" style="color:var(--text3);text-align:center;font-size:13px;padding:2rem">
+              <div style="font-size:36px;margin-bottom:8px">📷</div>
+              Camera will appear here
+            </div>
+            <button class="vis-capture-btn" id="vis-capture-btn" onclick="captureAndAnalyze()" title="Take photo" style="display:none">📸</button>
+          </div>
+          <canvas id="vis-canvas"></canvas>
+        </div>
+
+        <!-- Upload tab -->
+        <div id="vis-tab-upload" style="display:none">
+          <div class="vis-upload-area" id="vis-upload-area">
+            <img id="vis-upload-preview" class="vis-preview-img" style="display:none">
+            <div id="vis-upload-ph">
+              <div style="font-size:32px;margin-bottom:8px">🖼</div>
+              Tap to choose a photo from your gallery
+            </div>
+            <input type="file" accept="image/*" onchange="handleVisUpload(event)">
+          </div>
+          <div style="margin-top:10px;text-align:center" id="vis-upload-analyze-wrap" style="display:none">
+            <button class="btn btn-red" id="vis-upload-analyze-btn" onclick="analyzeUploadedImg()" style="display:none">🔍 Identify this car</button>
+          </div>
+        </div>
+
+        <div class="vis-status" id="vis-status"></div>
+        <div id="vis-results"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<div id="print-area"></div>
+
+<!-- ── Add/Edit Modal ── -->
+<div id="modal-add" style="display:none">
+  <div class="modal-bg" onclick="if(event.target===this)closeAdd()">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="modal-add-title">Add car</div>
+        <button class="close-btn" onclick="closeAdd()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <label>Photo</label>
+          <div class="img-upload-area" id="upload-area">
+            <img id="img-preview" class="img-preview-thumb" style="display:none">
+            <div id="upload-ph">📷 Tap to upload a photo</div>
+            <input type="file" accept="image/*" onchange="handleImg(event)">
+          </div>
+        </div>
+        <div class="form-row">
+          <label>Car name *</label>
+          <input id="f-name" placeholder="e.g. '70 Dodge Charger RT">
+        </div>
+        <div class="form-grid">
+          <div class="form-row">
+            <label>Series / line</label>
+            <input id="f-series" placeholder="e.g. Muscle Mania">
+          </div>
+          <div class="form-row">
+            <label>Model year</label>
+            <input id="f-year" placeholder="e.g. 2024">
+          </div>
+        </div>
+        <div class="form-grid">
+          <div class="form-row">
+            <label>Purchase price (NT$) *</label>
+            <input type="number" id="f-price" placeholder="0" min="0" step="1">
+          </div>
+          <div class="form-row">
+            <label>Condition</label>
+            <select id="f-cond">
+              <option>Mint</option><option>Used</option><option>Damaged</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row">
+          <label>Estimated resale value (NT$)</label>
+          <input type="number" id="f-resale" placeholder="Leave blank if unknown" min="0" step="1">
+        </div>
+        <div class="form-row">
+          <label>Notes</label>
+          <textarea id="f-notes" placeholder="Where you got it, limited edition details…"></textarea>
+        </div>
+        <div class="form-actions">
+          <button class="btn" onclick="closeAdd()">Cancel</button>
+          <button class="btn btn-red" id="save-btn" onclick="saveCar()">✓ Save car</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Detail Modal ── -->
+<div id="modal-detail" style="display:none">
+  <div class="modal-bg" onclick="if(event.target===this)closeDetail()">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title" id="detail-title">Car details</div>
+        <button class="close-btn" onclick="closeDetail()">✕</button>
+      </div>
+      <div class="modal-body" id="detail-body"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Scanner Modal ── -->
+<div id="modal-scanner" style="display:none">
+  <div class="modal-bg" onclick="if(event.target===this)closeScanner()">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">Scan barcode</div>
+        <button class="close-btn" onclick="closeScanner()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13px;color:var(--text2);margin-bottom:12px">Point your camera at a Hot Wheels Garage barcode to look up or add a car.</p>
+        <div class="scanner-wrap">
+          <video id="scanner-video" autoplay muted playsinline></video>
+          <div class="scanner-overlay"><div class="scanner-frame"></div></div>
+        </div>
+        <div class="scanner-status" id="scanner-status">Initializing camera…</div>
+        <div class="form-actions" style="margin-top:12px">
+          <button class="btn" onclick="closeScanner()">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Print Preview Modal ── -->
+<div id="modal-print" style="display:none">
+  <div class="modal-bg" onclick="if(event.target===this)closePrint()">
+    <div class="modal" style="width:600px">
+      <div class="modal-header">
+        <div class="modal-title">Print barcode labels</div>
+        <button class="close-btn" onclick="closePrint()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size:13px;color:var(--text2);margin-bottom:14px">Select which cars to print labels for. Each label fits a standard 2×1 inch sticker.</p>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <button class="btn btn-sm" onclick="selectAllPrint(true)">Select all</button>
+          <button class="btn btn-sm" onclick="selectAllPrint(false)">Deselect all</button>
+        </div>
+        <div id="print-list" style="max-height:320px;overflow-y:auto;border:0.5px solid var(--border);border-radius:var(--radius);"></div>
+        <div class="form-actions">
+          <button class="btn" onclick="closePrint()">Cancel</button>
+          <button class="btn btn-red" onclick="doPrint()">🖨️ Print labels</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DB = 'hw_garage_v2';
+let cars = [];
+let editingId = null;
+let pendingImg = null;
+let scannerReader = null;
+let scannerStream = null;
+
+// ── Storage ──
+function load() {
+  try { const r = localStorage.getItem(DB); if (r) cars = JSON.parse(r); } catch(e) { cars = []; }
+}
+function persist() {
+  try { localStorage.setItem(DB, JSON.stringify(cars)); } catch(e) { alert('Storage full. Try exporting and clearing some entries.'); }
+}
+
+// ── Code gen ──
+function genCode() {
+  return 'HW-' + Date.now().toString(36).toUpperCase().slice(-6);
+}
+
+// ── Render stats ──
+function renderStats() {
+  const total = cars.length;
+  const spent = cars.reduce((s,c) => s + (parseFloat(c.price)||0), 0);
+  const resaleKnown = cars.filter(c => c.resale > 0);
+  const totalResale = resaleKnown.reduce((s,c) => s + (parseFloat(c.resale)||0), 0);
+  const gainLoss = totalResale - resaleKnown.reduce((s,c) => s + (parseFloat(c.price)||0), 0);
+  const mint = cars.filter(c => c.condition === 'Mint').length;
+  document.getElementById('stats-bar').innerHTML = `
+    <div class="stat"><div class="stat-label">Total cars</div><div class="stat-val">${total}</div></div>
+    <div class="stat"><div class="stat-label">Total spent</div><div class="stat-val">NT$${Math.round(spent).toLocaleString()}</div></div>
+    <div class="stat"><div class="stat-label">Est. collection value</div><div class="stat-val">NT$${Math.round(totalResale).toLocaleString()}</div><div class="stat-sub">${resaleKnown.length} cars valued</div></div>
+    <div class="stat"><div class="stat-label">Total gain / loss</div><div class="stat-val" style="color:${gainLoss>=0?'var(--green)':'var(--red-dark)'}">${gainLoss>=0?'+':''}NT$${Math.round(gainLoss).toLocaleString()}</div></div>
+    <div class="stat"><div class="stat-label">Mint condition</div><div class="stat-val">${mint}</div><div class="stat-sub">of ${total} total</div></div>
+  `;
+}
+
+// ── Render grid ──
+function renderGrid() {
+  const q = (document.getElementById('search').value||'').toLowerCase();
+  const cond = document.getElementById('filter-cond').value;
+  const sort = document.getElementById('sort').value;
+
+  let list = cars.filter(c => {
+    const mq = !q || c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q) || (c.series||'').toLowerCase().includes(q);
+    const mc = !cond || c.condition === cond;
+    return mq && mc;
+  });
+
+  list.sort((a,b) => {
+    if (sort==='date-desc') return b.created-a.created;
+    if (sort==='date-asc') return a.created-b.created;
+    if (sort==='price-desc') return (parseFloat(b.price)||0)-(parseFloat(a.price)||0);
+    if (sort==='price-asc') return (parseFloat(a.price)||0)-(parseFloat(b.price)||0);
+    if (sort==='gain-desc') return gainPct(b)-gainPct(a);
+    if (sort==='name-asc') return a.name.localeCompare(b.name);
+    return 0;
+  });
+
+  const g = document.getElementById('grid');
+  if (!list.length) {
+    g.innerHTML = `<div class="empty"><div class="empty-icon">🏎️</div>${cars.length ? 'No cars match your search.' : 'No cars yet — add your first one!'}</div>`;
+    return;
+  }
+
+  g.innerHTML = list.map(c => {
+    const gp = gainPct(c);
+    const gainHtml = c.resale > 0 ? `<span class="card-gain ${gp>=0?'gain-pos':'gain-neg'}">${gp>=0?'▲':'▼'}${Math.abs(gp)}%</span>` : '';
+    return `<div class="card" onclick="openDetail('${c.id}')">
+      <div class="card-img">${c.img ? `<img src="${c.img}" alt="${c.name}" loading="lazy">` : `<div class="card-img-ph">🏎</div>`}</div>
+      <div class="card-body">
+        <div class="card-code">${c.code}</div>
+        <div class="card-name">${c.name}</div>
+        <div class="card-series">${c.series||'—'}${c.year?' · '+c.year:''}</div>
+        <div class="card-footer">
+          <span class="card-price">NT$${Math.round(parseFloat(c.price)||0).toLocaleString()}</span>
+          ${gainHtml}
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function gainPct(c) {
+  const p = parseFloat(c.price)||0;
+  const r = parseFloat(c.resale)||0;
+  if (!p || !r) return 0;
+  return Math.round((r-p)/p*100);
+}
+
+// ── Value tab ──
+function renderValueTab() {
+  const withResale = cars.filter(c => c.resale > 0);
+  const totalSpent = cars.reduce((s,c) => s+(parseFloat(c.price)||0), 0);
+  const totalResale = withResale.reduce((s,c) => s+(parseFloat(c.resale)||0), 0);
+  const spentValued = withResale.reduce((s,c) => s+(parseFloat(c.price)||0), 0);
+  const gainLoss = totalResale - spentValued;
+  const pct = spentValued > 0 ? Math.round(gainLoss/spentValued*100) : 0;
+
+  document.getElementById('value-stats').innerHTML = `
+    <div class="stat"><div class="stat-label">Cars with resale data</div><div class="stat-val">${withResale.length}</div><div class="stat-sub">of ${cars.length} total</div></div>
+    <div class="stat"><div class="stat-label">Total spent (valued)</div><div class="stat-val">NT$${Math.round(spentValued).toLocaleString()}</div></div>
+    <div class="stat"><div class="stat-label">Est. total resale</div><div class="stat-val">NT$${Math.round(totalResale).toLocaleString()}</div></div>
+    <div class="stat"><div class="stat-label">Overall ROI</div><div class="stat-val" style="color:${pct>=0?'var(--green)':'var(--red-dark)'}">${pct>=0?'+':''}${pct}%</div></div>
+  `;
+
+  // Bar chart — top 8
+  const top8 = [...withResale].sort((a,b) => (parseFloat(b.resale)||0)-(parseFloat(a.resale)||0)).slice(0,8);
+  const maxVal = top8.length ? Math.max(...top8.map(c => parseFloat(c.resale)||0)) : 1;
+  document.getElementById('value-chart').innerHTML = top8.length
+    ? top8.map(c => {
+        const h = Math.round(((parseFloat(c.resale)||0)/maxVal)*100);
+        return `<div class="bar-col">
+          <div class="bar-val">NT$${Math.round(parseFloat(c.resale)||0).toLocaleString()}</div>
+          <div class="bar" style="height:${h}%"></div>
+          <div class="bar-label">${c.name.split(' ').slice(0,2).join(' ')}</div>
+        </div>`;
+      }).join('')
+    : '<div style="color:var(--text3);font-size:13px;margin:auto">No resale data yet. Add estimated resale values when editing cars.</div>';
+
+  // Table
+  if (!withResale.length) {
+    document.getElementById('value-table').innerHTML = '';
+    return;
+  }
+  const sorted = [...withResale].sort((a,b) => gainPct(b)-gainPct(a));
+  document.getElementById('value-table').innerHTML = `
+    <div style="background:var(--surface);border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
+      <div style="padding:12px 16px;font-size:12px;font-weight:600;color:var(--text3);border-bottom:0.5px solid var(--border);display:grid;grid-template-columns:1fr 100px 100px 70px;gap:8px;text-transform:uppercase;letter-spacing:.3px">
+        <div>Car</div><div style="text-align:right">Paid</div><div style="text-align:right">Resale</div><div style="text-align:right">ROI</div>
+      </div>
+      ${sorted.map(c => {
+        const gp = gainPct(c);
+        return `<div style="padding:10px 16px;font-size:13px;display:grid;grid-template-columns:1fr 100px 100px 70px;gap:8px;border-bottom:0.5px solid var(--border);cursor:pointer" onclick="openDetail('${c.id}')">
+          <div style="font-weight:600">${c.name}<div style="font-size:11px;color:var(--text3);font-weight:400">${c.series||''}</div></div>
+          <div style="text-align:right;color:var(--text2)">NT$${Math.round(parseFloat(c.price)||0).toLocaleString()}</div>
+          <div style="text-align:right;font-weight:600">NT$${Math.round(parseFloat(c.resale)||0).toLocaleString()}</div>
+          <div style="text-align:right;font-weight:700;color:${gp>=0?'var(--green)':'var(--red-dark)'}">${gp>=0?'+':''}${gp}%</div>
+        </div>`;
+      }).join('')}
+    </div>
+  `;
+}
+
+// ── Tabs ──
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-inventory').style.display = name==='inventory' ? '' : 'none';
+  document.getElementById('tab-value').style.display = name==='value' ? '' : 'none';
+  if (name==='value') renderValueTab();
+}
+
+// ── Add modal ──
+function openAdd(prefill) {
+  editingId = null; pendingImg = null;
+  document.getElementById('modal-add-title').textContent = 'Add car';
+  document.getElementById('save-btn').textContent = '✓ Save car';
+  ['f-name','f-series','f-year','f-notes'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('f-price').value = '';
+  document.getElementById('f-resale').value = '';
+  document.getElementById('f-cond').value = 'Mint';
+  const prev = document.getElementById('img-preview');
+  prev.style.display = 'none'; prev.src = '';
+  document.getElementById('upload-ph').style.display = '';
+  if (prefill) {
+    if (prefill.name) document.getElementById('f-name').value = prefill.name;
+    if (prefill.series) document.getElementById('f-series').value = prefill.series;
+    if (prefill.year) document.getElementById('f-year').value = prefill.year;
+  }
+  document.getElementById('modal-add').style.display = '';
+}
+function closeAdd() { document.getElementById('modal-add').style.display = 'none'; }
+
+function handleImg(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    pendingImg = ev.target.result;
+    const prev = document.getElementById('img-preview');
+    prev.src = pendingImg; prev.style.display = 'block';
+    document.getElementById('upload-ph').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+function saveCar() {
+  const name = document.getElementById('f-name').value.trim();
+  if (!name) { alert('Car name is required.'); return; }
+  const price = parseFloat(document.getElementById('f-price').value)||0;
+  const resale = parseFloat(document.getElementById('f-resale').value)||0;
+  if (editingId) {
+    const car = cars.find(c => c.id===editingId);
+    if (car) {
+      car.name = name;
+      car.series = document.getElementById('f-series').value.trim();
+      car.year = document.getElementById('f-year').value.trim();
+      car.price = price; car.resale = resale;
+      car.condition = document.getElementById('f-cond').value;
+      car.notes = document.getElementById('f-notes').value.trim();
+      if (pendingImg) car.img = pendingImg;
+    }
+  } else {
+    cars.unshift({ id:'car_'+Date.now(), code:genCode(), name, series:document.getElementById('f-series').value.trim(), year:document.getElementById('f-year').value.trim(), price, resale, condition:document.getElementById('f-cond').value, notes:document.getElementById('f-notes').value.trim(), img:pendingImg||null, created:Date.now() });
+  }
+  persist(); renderStats(); renderGrid(); closeAdd();
+}
+
+// ── Detail modal ──
+function openDetail(id) {
+  const car = cars.find(c => c.id===id); if (!car) return;
+  document.getElementById('detail-title').textContent = car.name;
+  const gp = gainPct(car);
+  const gainHtml = car.resale > 0 ? `
+    <div class="resale-box">
+      <div class="resale-title">📈 Resale value tracker</div>
+      <div class="resale-row"><span style="color:var(--text2)">Paid</span><span style="font-weight:600">NT$${Math.round(parseFloat(car.price)||0).toLocaleString()}</span></div>
+      <div class="resale-row"><span style="color:var(--text2)">Est. resale</span><span style="font-weight:600">NT$${Math.round(parseFloat(car.resale)||0).toLocaleString()}</span></div>
+      <div class="resale-row"><span style="color:var(--text2)">Gain / loss</span><span style="font-weight:700;color:${gp>=0?'var(--green)':'var(--red-dark)'}">${gp>=0?'+':''}${gp}% (NT$${Math.round((parseFloat(car.resale)||0)-(parseFloat(car.price)||0)).toLocaleString()})</span></div>
+    </div>` : '';
+
+  document.getElementById('detail-body').innerHTML = `
+    ${car.img ? `<img src="${car.img}" alt="${car.name}" class="detail-img">` : `<div class="detail-img-ph">🏎</div>`}
+    <div class="barcode-box">
+      <svg id="bc-svg-${car.id}"></svg>
+      <div class="barcode-num">${car.code}</div>
+    </div>
+    ${gainHtml}
+    <div class="detail-rows">
+      <div class="detail-row"><span class="detail-label">Series</span><span class="detail-val">${car.series||'—'}</span></div>
+      <div class="detail-row"><span class="detail-label">Model year</span><span class="detail-val">${car.year||'—'}</span></div>
+      <div class="detail-row"><span class="detail-label">Purchase price</span><span class="detail-val" style="color:var(--red)">NT$${Math.round(parseFloat(car.price)||0).toLocaleString()}</span></div>
+      <div class="detail-row"><span class="detail-label">Condition</span><span class="detail-val"><span class="tag tag-${(car.condition||'used').toLowerCase()}">${car.condition||'—'}</span></span></div>
+      <div class="detail-row"><span class="detail-label">Added</span><span class="detail-val">${new Date(car.created).toLocaleDateString()}</span></div>
+      ${car.notes?`<div class="detail-row" style="flex-direction:column;align-items:flex-start;gap:4px"><span class="detail-label">Notes</span><span style="font-size:13px">${car.notes}</span></div>`:''}
+    </div>
+    <div class="form-actions">
+      <button class="btn btn-sm" style="color:var(--red-dark);border-color:#f09595" onclick="deleteCar('${car.id}')">🗑 Delete</button>
+      <button class="btn btn-sm" onclick="editCar('${car.id}')">✏️ Edit</button>
+    </div>
+  `;
+  document.getElementById('modal-detail').style.display = '';
+
+  // Render barcode after DOM update
+  setTimeout(() => {
+    try {
+      JsBarcode(`#bc-svg-${car.id}`, car.code, { format:'CODE128', width:1.8, height:48, displayValue:false, margin:4, background:'transparent', lineColor: getComputedStyle(document.documentElement).getPropertyValue('--text')||'#000' });
+    } catch(e) {}
+  }, 50);
+}
+function closeDetail() { document.getElementById('modal-detail').style.display = 'none'; }
+
+function deleteCar(id) {
+  if (!confirm('Remove this car from your collection?')) return;
+  cars = cars.filter(c => c.id!==id);
+  persist(); renderStats(); renderGrid(); closeDetail();
+}
+function editCar(id) {
+  closeDetail();
+  const car = cars.find(c => c.id===id); if (!car) return;
+  editingId = id; pendingImg = null;
+  document.getElementById('modal-add-title').textContent = 'Edit car';
+  document.getElementById('save-btn').textContent = '✓ Save changes';
+  document.getElementById('f-name').value = car.name;
+  document.getElementById('f-series').value = car.series||'';
+  document.getElementById('f-year').value = car.year||'';
+  document.getElementById('f-price').value = car.price||'';
+  document.getElementById('f-resale').value = car.resale||'';
+  document.getElementById('f-cond').value = car.condition||'Mint';
+  document.getElementById('f-notes').value = car.notes||'';
+  const prev = document.getElementById('img-preview');
+  if (car.img) { prev.src=car.img; prev.style.display='block'; document.getElementById('upload-ph').style.display='none'; }
+  else { prev.style.display='none'; document.getElementById('upload-ph').style.display=''; }
+  document.getElementById('modal-add').style.display = '';
+}
+
+// ── Scanner ──
+function openScanner() {
+  document.getElementById('modal-scanner').style.display = '';
+  document.getElementById('scanner-status').textContent = 'Initializing camera…';
+  startScanner();
+}
+function closeScanner() {
+  stopScanner();
+  document.getElementById('modal-scanner').style.display = 'none';
+}
+async function startScanner() {
+  try {
+    const video = document.getElementById('scanner-video');
+    scannerStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment' } });
+    video.srcObject = scannerStream;
+    const codeReader = new ZXing.BrowserMultiFormatReader();
+    scannerReader = codeReader;
+    document.getElementById('scanner-status').textContent = 'Align barcode in the frame…';
+    codeReader.decodeFromVideoElement(video, (result, err) => {
+      if (result) {
+        const code = result.getText();
+        handleScanResult(code);
+      }
+    });
+  } catch(e) {
+    document.getElementById('scanner-status').textContent = 'Camera unavailable. Please allow camera access.';
+  }
+}
+function stopScanner() {
+  try { if (scannerReader) { scannerReader.reset(); scannerReader = null; } } catch(e) {}
+  try { if (scannerStream) { scannerStream.getTracks().forEach(t => t.stop()); scannerStream = null; } } catch(e) {}
+}
+function handleScanResult(code) {
+  stopScanner();
+  document.getElementById('scanner-status').innerHTML = `<span class="scanner-found">✓ Found: ${code}</span>`;
+  setTimeout(() => {
+    closeScanner();
+    const existing = cars.find(c => c.code === code);
+    if (existing) {
+      openDetail(existing.id);
+    } else {
+      if (confirm(`Code "${code}" not found in your collection.\n\nAdd a new car with this code?`)) {
+        openAdd({ name:'' });
+        // Note: custom codes from scanning — user can add it; we'll generate a new one if they proceed
+      }
+    }
+  }, 800);
+}
+
+// ── Print labels ──
+function openPrintView() {
+  const list = document.getElementById('print-list');
+  list.innerHTML = cars.length
+    ? cars.map(c => `
+        <label style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:0.5px solid var(--border);cursor:pointer;font-size:13px">
+          <input type="checkbox" checked data-id="${c.id}" style="width:16px;height:16px;flex-shrink:0">
+          ${c.img?`<img src="${c.img}" style="width:40px;height:28px;object-fit:cover;border-radius:4px;flex-shrink:0">`:'<div style="width:40px;height:28px;background:var(--surface2);border-radius:4px;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:16px">🏎</div>'}
+          <div><div style="font-weight:600">${c.name}</div><div style="color:var(--text3);font-family:monospace;font-size:11px">${c.code}</div></div>
+        </label>`).join('')
+    : '<div style="padding:1.5rem;text-align:center;color:var(--text3);font-size:13px">No cars to print.</div>';
+  document.getElementById('modal-print').style.display = '';
+}
+function closePrint() { document.getElementById('modal-print').style.display = 'none'; }
+function selectAllPrint(v) {
+  document.querySelectorAll('#print-list input[type=checkbox]').forEach(cb => cb.checked = v);
+}
+function doPrint() {
+  const selected = [...document.querySelectorAll('#print-list input[type=checkbox]:checked')].map(cb => cb.dataset.id);
+  if (!selected.length) { alert('Select at least one car.'); return; }
+  const toPrint = cars.filter(c => selected.includes(c.id));
+  const area = document.getElementById('print-area');
+  area.innerHTML = toPrint.map(c => `
+    <div class="print-label">
+      <div class="pl-name">${c.name}</div>
+      <div class="pl-series">${c.series||''}${c.year?' · '+c.year:''}</div>
+      <svg id="plbc-${c.id}"></svg>
+      <div class="pl-code">${c.code}</div>
+    </div>
+  `).join('');
+  closePrint();
+  setTimeout(() => {
+    toPrint.forEach(c => {
+      try {
+        JsBarcode(`#plbc-${c.id}`, c.code, { format:'CODE128', width:1.5, height:36, displayValue:false, margin:2, background:'white', lineColor:'#000' });
+      } catch(e) {}
+    });
+    setTimeout(() => window.print(), 200);
+  }, 100);
+}
+
+// ── Export CSV ──
+function exportCSV() {
+  if (!cars.length) { alert('No cars to export.'); return; }
+  const rows = [['Code','Name','Series','Year','Paid (NT$)','Resale (NT$)','ROI %','Condition','Notes','Date added']];
+  cars.forEach(c => rows.push([c.code,c.name,c.series||'',c.year||'',Math.round(parseFloat(c.price)||0),Math.round(parseFloat(c.resale)||0),gainPct(c),c.condition,c.notes||'',new Date(c.created).toLocaleDateString()]));
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a'); a.href = 'data:text/csv;charset=utf-8,'+encodeURIComponent(csv); a.download = 'hot_wheels_garage.csv'; a.click();
+}
+
+// ── AI Visual Search ──
+let visStream = null;
+let visUploadDataUrl = null;
+const API_KEY_STORAGE = 'hw_apikey';
+
+function saveApiKey(val) {
+  try { if (val) localStorage.setItem(API_KEY_STORAGE, val); else localStorage.removeItem(API_KEY_STORAGE); } catch(e) {}
+}
+function loadApiKey() {
+  try { return localStorage.getItem(API_KEY_STORAGE)||''; } catch(e) { return ''; }
+}
+
+function openVisSearch() {
+  document.getElementById('vis-apikey').value = loadApiKey();
+  document.getElementById('vis-status').textContent = '';
+  document.getElementById('vis-results').innerHTML = '';
+  visUploadDataUrl = null;
+  document.getElementById('modal-vis').style.display = '';
+  switchVisTab('camera', document.querySelector('.vis-tab'));
+  startVisCamera();
+}
+function closeVisSearch() {
+  stopVisCamera();
+  document.getElementById('modal-vis').style.display = 'none';
+  document.getElementById('vis-results').innerHTML = '';
+  document.getElementById('vis-status').textContent = '';
+}
+function stopVisCamera() {
+  try { if (visStream) { visStream.getTracks().forEach(t=>t.stop()); visStream = null; } } catch(e) {}
+  const v = document.getElementById('vis-video');
+  v.srcObject = null;
+}
+async function startVisCamera() {
+  const wrap = document.getElementById('vis-camera-wrap');
+  const video = document.getElementById('vis-video');
+  const ph = document.getElementById('vis-camera-ph');
+  const btn = document.getElementById('vis-capture-btn');
+  try {
+    visStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'environment', width:{ideal:1280}, height:{ideal:720} } });
+    video.srcObject = visStream;
+    video.style.display = 'block';
+    ph.style.display = 'none';
+    btn.style.display = 'flex';
+    document.getElementById('vis-status').textContent = 'Point at any Hot Wheels car and tap 📸';
+  } catch(e) {
+    ph.innerHTML = '<div style="font-size:28px;margin-bottom:8px">⚠️</div>Camera access denied.<br><small>Switch to the Upload tab instead.</small>';
+    video.style.display = 'none';
+  }
+}
+
+function switchVisTab(tab, btn) {
+  document.querySelectorAll('.vis-tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('vis-tab-camera').style.display = tab==='camera'?'':'none';
+  document.getElementById('vis-tab-upload').style.display = tab==='upload'?'':'none';
+  document.getElementById('vis-results').innerHTML = '';
+  document.getElementById('vis-status').textContent = '';
+  if (tab==='camera') { startVisCamera(); }
+  else { stopVisCamera(); }
+}
+
+function captureAndAnalyze() {
+  const video = document.getElementById('vis-video');
+  const canvas = document.getElementById('vis-canvas');
+  if (!video.srcObject) { alert('Camera not active.'); return; }
+  canvas.width = video.videoWidth || 640;
+  canvas.height = video.videoHeight || 480;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+  analyzeImage(dataUrl);
+}
+
+function handleVisUpload(e) {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    visUploadDataUrl = ev.target.result;
+    const prev = document.getElementById('vis-upload-preview');
+    prev.src = visUploadDataUrl; prev.style.display = 'block';
+    document.getElementById('vis-upload-ph').style.display = 'none';
+    const btn = document.getElementById('vis-upload-analyze-btn');
+    btn.style.display = 'inline-flex';
+    document.getElementById('vis-upload-analyze-wrap').style.display = '';
+  };
+  reader.readAsDataURL(file);
+}
+function analyzeUploadedImg() {
+  if (!visUploadDataUrl) { alert('Please choose a photo first.'); return; }
+  analyzeImage(visUploadDataUrl);
+}
+
+async function analyzeImage(dataUrl) {
+  const apiKey = document.getElementById('vis-apikey').value.trim() || loadApiKey();
+  if (!apiKey) {
+    document.getElementById('vis-status').innerHTML = '⚠️ Please enter your Anthropic API key above to use AI identification.';
+    return;
+  }
+
+  const statusEl = document.getElementById('vis-status');
+  const resultsEl = document.getElementById('vis-results');
+  statusEl.innerHTML = '<span style="color:var(--blue)">🤖 AI is identifying the car…</span>';
+  resultsEl.innerHTML = '';
+
+  // Strip data URL prefix to get base64
+  const base64 = dataUrl.split(',')[1];
+  const mimeMatch = dataUrl.match(/data:([^;]+);/);
+  const mediaType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+
+  // Build inventory context for the AI
+  const inventoryContext = cars.length
+    ? `The user's current inventory contains ${cars.length} cars:\n` + cars.map(c=>`- ID:${c.id} | "${c.name}" | Series: ${c.series||'unknown'} | Year: ${c.year||'?'}`).join('\n')
+    : 'The user has no cars in their inventory yet.';
+
+  const prompt = `You are an expert Hot Wheels car identifier and collector assistant.
+
+${inventoryContext}
+
+The user has taken a photo of a Hot Wheels car (or a toy car that might be Hot Wheels). Please:
+
+1. IDENTIFY the car: give the exact casting name, series/line, approximate year, color variant, and any notable details (Treasure Hunt, Super Treasure Hunt, special edition, etc.)
+2. MATCH against inventory: Look at the inventory list above. Find any cars that could be the same casting (even different colors/years count as a match). List matching car IDs.
+3. CONFIDENCE: rate your identification confidence as HIGH, MEDIUM, or LOW.
+
+Respond ONLY with valid JSON in this exact format:
+{
+  "identified": true,
+  "name": "casting name here",
+  "series": "series name",
+  "year": "year or range",
+  "color": "color description",
+  "special": "any special edition note, or null",
+  "confidence": "HIGH|MEDIUM|LOW",
+  "notes": "any extra details about this casting",
+  "matchingIds": ["car_id_1", "car_id_2"],
+  "notInCollection": true
+}
+
+If you cannot identify it as a Hot Wheels or toy car at all, respond with:
+{"identified": false, "reason": "explanation"}`;
+
+  try {
+    const resp = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-access': 'true' },
+      body: JSON.stringify({
+        model: 'claude-opus-4-6',
+        max_tokens: 600,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+            { type: 'text', text: prompt }
+          ]
+        }]
+      })
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(()=>({}));
+      throw new Error(err.error?.message || `API error ${resp.status}`);
+    }
+
+    const data = await resp.json();
+    const raw = data.content.find(b=>b.type==='text')?.text || '';
+    // Extract JSON safely
+    const jsonMatch = raw.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Could not parse AI response');
+    const result = JSON.parse(jsonMatch[0]);
+    displayVisResult(result);
+  } catch(e) {
+    statusEl.innerHTML = `<span style="color:var(--red)">❌ ${e.message}</span>`;
+  }
+}
+
+function displayVisResult(result) {
+  const statusEl = document.getElementById('vis-status');
+  const resultsEl = document.getElementById('vis-results');
+
+  if (!result.identified) {
+    statusEl.textContent = '';
+    resultsEl.innerHTML = `<div class="vis-no-match" style="padding:1.5rem">
+      <div style="font-size:32px;margin-bottom:8px">🤔</div>
+      <div style="font-weight:600;margin-bottom:4px">Not identified as a Hot Wheels car</div>
+      <div style="color:var(--text3)">${result.reason||'Try a clearer photo with better lighting.'}</div>
+    </div>`;
+    return;
+  }
+
+  const confColor = result.confidence==='HIGH' ? 'var(--green)' : result.confidence==='MEDIUM' ? 'var(--amber)' : 'var(--text3)';
+  const confIcon = result.confidence==='HIGH' ? '✅' : result.confidence==='MEDIUM' ? '⚠️' : '❓';
+
+  const matchedCars = (result.matchingIds||[]).map(id => cars.find(c=>c.id===id)).filter(Boolean);
+
+  statusEl.textContent = '';
+
+  let html = `<div class="vis-identified">
+    <div class="vis-identified-title">${confIcon} AI identified — ${result.confidence} confidence</div>
+    <div class="vis-identified-name">${result.name}</div>
+    <div class="vis-identified-sub">${[result.series, result.year, result.color].filter(Boolean).join(' · ')}</div>
+    ${result.special ? `<div style="margin-top:6px;font-size:12px;font-weight:700;color:var(--red)">⭐ ${result.special}</div>` : ''}
+    ${result.notes ? `<div style="margin-top:6px;font-size:12px;color:var(--text2)">${result.notes}</div>` : ''}
+  </div>`;
+
+  if (matchedCars.length > 0) {
+    html += `<div class="vis-result" style="margin-top:12px">
+      <div class="vis-result-header" style="color:var(--green)">✅ Found in your collection (${matchedCars.length} match${matchedCars.length>1?'es':''})</div>
+      ${matchedCars.map(c => {
+        const gp = gainPct(c);
+        return `<div class="vis-match" onclick="closeVisSearch();openDetail('${c.id}')">
+          ${c.img ? `<img class="vis-match-img" src="${c.img}" alt="${c.name}">` : `<div class="vis-match-img">🏎</div>`}
+          <div class="vis-match-info">
+            <div class="vis-match-name">${c.name}</div>
+            <div class="vis-match-meta">${c.code} · ${c.series||'—'} · ¥${Math.round(parseFloat(c.price)||0).toLocaleString()}</div>
+          </div>
+          <span class="vis-match-score vis-score-high">You own this</span>
+        </div>`;
+      }).join('')}
+    </div>`;
+  } else {
+    html += `<div class="vis-result" style="margin-top:12px">
+      <div class="vis-result-header" style="color:var(--amber)">❌ Not in your collection</div>
+      <div class="vis-no-match">
+        <div style="margin-bottom:10px">You don't own a <strong>${result.name}</strong> yet.</div>
+        <button class="btn btn-red" onclick="closeVisSearch();openAdd({name:'${result.name.replace(/'/g,"\\'")}',series:'${(result.series||'').replace(/'/g,"\\'")}',year:'${result.year||''}'})">+ Add to collection</button>
+      </div>
+    </div>`;
+  }
+
+  resultsEl.innerHTML = html;
+}
+
+// ── Init ──
+load();
+renderStats();
+renderGrid();
+</script>
+</body>
+</html>
